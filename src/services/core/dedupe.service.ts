@@ -84,8 +84,8 @@ export class DedupeService {
 
     // Merge custom fields (keep non-null values from duplicate)
     const mergedCustomFields = {
-      ...primary.customFields,
-      ...duplicate.customFields,
+      ...(primary.customFields as Record<string, any> ?? {}),
+      ...(duplicate.customFields as Record<string, any> ?? {}),
     };
 
     // Update primary lead

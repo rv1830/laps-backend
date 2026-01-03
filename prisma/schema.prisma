@@ -30,6 +30,7 @@ model Workspace {
   
   // Relations
   users       WorkspaceUser[]
+  invitations Invitation[]
   leads       Lead[]
   stages      Stage[]
   sequences   Sequence[]
@@ -102,6 +103,26 @@ model Role {
   createdAt   DateTime @default(now())
   
   workspaceUsers WorkspaceUser[]
+  invitations    Invitation[]
+}
+
+model Invitation {
+  id          String   @id @default(cuid())
+  workspaceId String
+  email       String
+  roleId      String
+  status      String   @default("PENDING") // PENDING, ACCEPTED, EXPIRED
+  
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  role        Role      @relation(fields: [roleId], references: [id])
+  
+  @@index([email])
+  @@index([workspaceId])
+  @@index([status])
 }
 
 // ============================================================================
