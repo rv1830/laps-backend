@@ -122,7 +122,7 @@ export class BookingController {
         const event = await calendarService.createEvent({
           accessToken: credentials.accessToken,
           summary: `${bookingLink.name} - ${leadName}`,
-          description: bookingLink.description,
+          description: bookingLink.description || undefined,
           startTime: new Date(startTime),
           endTime,
           attendees: [leadEmail],
@@ -135,7 +135,7 @@ export class BookingController {
         const event = await calendarService.createEvent({
           accessToken: credentials.accessToken,
           subject: `${bookingLink.name} - ${leadName}`,
-          body: bookingLink.description,
+          body: bookingLink.description ?? undefined,
           startTime: new Date(startTime),
           endTime,
           attendees: [leadEmail],
