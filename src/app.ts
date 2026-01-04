@@ -1,6 +1,7 @@
 // ============================================================================
 // src/app.ts - Main Application Entry
 // ============================================================================
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -21,7 +22,7 @@ import workspaceRoutes from './routes/workspace.routes';
 import leadRoutes from './routes/lead.routes';
 import sequenceRoutes from './routes/sequence.routes';
 import analyticsRoutes from './routes/analytics.routes';
-
+import integrationRoutes from './routes/integration.routes';
 export const prisma = new PrismaClient();
 
 const app = express();
@@ -61,6 +62,7 @@ app.use('/api', workspaceRoutes);
 app.use('/api', leadRoutes);
 app.use('/api', sequenceRoutes);
 app.use('/api', analyticsRoutes);
+app.use('/api/integrations', integrationRoutes);
 
 // Bull Board for job monitoring
 const serverAdapter = new ExpressAdapter();
