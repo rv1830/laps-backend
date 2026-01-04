@@ -42,9 +42,11 @@ export class LeadController {
 
       const fullName = `${firstName || ''} ${lastName || ''}`.trim() || email || phone || 'Unknown';
 
+      // src/controllers/lead.controller.ts ke andar createLead function mein ye part replace karo:
+
       const lead = await prisma.lead.create({
         data: {
-          workspaceId: workspaceId!,
+          // 1. Scalar Fields (Normal Data)
           email,
           phone,
           firstName,
@@ -52,9 +54,19 @@ export class LeadController {
           fullName,
           company,
           source,
-          stageId: finalStageId!,
           customFields: customFields || {},
-          ownerId: req.user!.id,
+
+          // 2. Relations (Use 'connect' here to fix the error)
+          workspace: {
+            connect: { id: workspaceId! } 
+          },
+          stage: {
+            connect: { id: finalStageId! }
+          },
+          // Owner optional hai, par agar user logged in hai to connect karo
+          owner: {
+            connect: { id: req.user!.id }
+          }
         },
       });
 
