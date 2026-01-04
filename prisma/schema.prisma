@@ -47,26 +47,31 @@ model Workspace {
 }
 
 model User {
-  id           String    @id @default(cuid())
-  email        String    @unique
-  passwordHash String?
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
   
-  // FIXED: Made optional for Step 1 Registration
-  firstName    String?   
-  lastName     String?
+  // FIXED: Step 1 ke liye inhein Optional (?) banaya hai
+  firstName     String?   
+  lastName      String?
   
-  avatar       String?
-  phone        String?
-  timezone     String    @default("UTC")
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  lastLoginAt  DateTime?
-  isActive     Boolean   @default(true)
+  // FIXED: Ye naya field add kiya jo code mein missing tha
+  dob           DateTime? 
+
+  // FIXED: 'phone' ko 'phoneNumber' rename kiya taaki code se match kare
+  phoneNumber   String?
+  
+  avatar        String?
+  timezone      String    @default("UTC")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lastLoginAt   DateTime?
+  isActive      Boolean   @default(true)
   emailVerified Boolean  @default(false)
 
   // OAuth
-  googleId    String? @unique
-  microsoftId String? @unique
+  googleId      String?   @unique
+  microsoftId   String?   @unique
 
   // Relations
   workspaces    WorkspaceUser[]
@@ -74,11 +79,7 @@ model User {
   activities    Activity[]
   tasks         Task[]
   
-  // NOTE: Schema mein DOB nahi tha, agar controller mein chahiye to yahan 'dob DateTime?' add karna padega manually later.
-
   @@index([email])
-  @@index([googleId])
-  @@index([microsoftId])
 }
 
 model WorkspaceUser {
@@ -117,12 +118,12 @@ model Invitation {
   roleId      String
   status      String   @default("PENDING") // PENDING, ACCEPTED, EXPIRED
 
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  role      Role      @relation(fields: [roleId], references: [id])
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  role        Role      @relation(fields: [roleId], references: [id])
 
   @@index([email])
   @@index([workspaceId])
