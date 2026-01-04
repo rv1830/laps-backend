@@ -1,4 +1,3 @@
-
 // ============================================================================
 // src/controllers/lead.controller.ts
 // ============================================================================
@@ -35,18 +34,23 @@ export class LeadController {
       let finalStageId = stageId;
       if (!finalStageId) {
         const defaultStage = await prisma.stage.findFirst({
-          where: { workspaceId: workspaceId!, order: 0 },
+          where: { workspaceId: workspaceId! },
+          orderBy: { order: 'asc' },
         });
+        
+        // SAFETY CHECK: Agar stage nahi hai to error return karo
+        if (!defaultStage) {
+            return res.status(400).json({ error: 'No pipeline stages found. Please create a stage first.' });
+        }
+        
         finalStageId = defaultStage?.id;
       }
 
       const fullName = `${firstName || ''} ${lastName || ''}`.trim() || email || phone || 'Unknown';
 
-      // src/controllers/lead.controller.ts ke andar createLead function mein ye part replace karo:
-
+      // FIXED: Used 'connect' for relations
       const lead = await prisma.lead.create({
         data: {
-          // 1. Scalar Fields (Normal Data)
           email,
           phone,
           firstName,
@@ -55,38 +59,40 @@ export class LeadController {
           company,
           source,
           customFields: customFields || {},
-
-          // 2. Relations (Use 'connect' here to fix the error)
+          
+          // Relations
           workspace: {
-            connect: { id: workspaceId! } 
+            connect: { id: workspaceId! }
           },
           stage: {
-            connect: { id: finalStageId! }
+            connect: { id: finalStageId }
           },
-          // Owner optional hai, par agar user logged in hai to connect karo
-          owner: {
-            connect: { id: req.user!.id }
-          }
+          // Connect owner only if user is logged in
+          ...(req.user?.id ? {
+            owner: {
+                connect: { id: req.user.id }
+            }
+          } : {})
         },
       });
 
       // Create activity
       await prisma.activity.create({
         data: {
-          workspaceId: workspaceId!,
-          leadId: lead.id,
-          userId: req.user!.id,
           type: 'lead_created',
           title: 'Lead created',
           metadata: { source },
+          workspace: { connect: { id: workspaceId! } },
+          lead: { connect: { id: lead.id } },
+          ...(req.user?.id ? { user: { connect: { id: req.user.id } } } : {})
         },
       });
 
-      // Trigger workflows
-      // This would call WorkflowEngine with trigger 'lead_created'
+      // Trigger workflows logic would go here
 
       res.status(201).json(lead);
     } catch (error: any) {
+      console.error("Create Lead Error:", error);
       res.status(500).json({ error: error.message });
     }
   }
@@ -208,15 +214,15 @@ export class LeadController {
       if (updates.stageId && updates.stageId !== lead.stageId) {
         await prisma.activity.create({
           data: {
-            workspaceId: workspaceId!,
-            leadId,
-            userId: req.user!.id,
             type: 'stage_changed',
             title: 'Stage changed',
             metadata: {
               oldStageId: lead.stageId,
               newStageId: updates.stageId,
             },
+            workspace: { connect: { id: workspaceId! } },
+            lead: { connect: { id: leadId } },
+            ...(req.user?.id ? { user: { connect: { id: req.user.id } } } : {})
           },
         });
 
@@ -253,6 +259,11 @@ export class LeadController {
         where: { workspaceId: workspaceId!, order: 0 },
       });
 
+      // Safety check for import as well
+      if (!defaultStage) {
+         return res.status(400).json({ error: 'No pipeline stages found. Please create a stage first.' });
+      }
+
       for (const leadData of leads) {
         try {
           if (!leadData.email && !leadData.phone) {
@@ -276,9 +287,9 @@ export class LeadController {
           const fullName = `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() 
             || leadData.email || leadData.phone || 'Unknown';
 
+          // FIXED: Used 'connect' here as well
           await prisma.lead.create({
             data: {
-              workspaceId: workspaceId!,
               email: leadData.email,
               phone: leadData.phone,
               firstName: leadData.firstName,
@@ -286,9 +297,18 @@ export class LeadController {
               fullName,
               company: leadData.company,
               source: leadData.source || 'import',
-              stageId: defaultStage!.id,
-              ownerId: req.user!.id,
               customFields: leadData.customFields || {},
+              
+              // Relations
+              workspace: {
+                connect: { id: workspaceId! }
+              },
+              stage: {
+                connect: { id: defaultStage.id }
+              },
+              owner: {
+                connect: { id: req.user!.id }
+              }
             },
           });
 
