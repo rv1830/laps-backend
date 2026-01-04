@@ -6,6 +6,8 @@ import { prisma } from '../app';
 import { AuthRequest } from '../middleware/auth.middleware';
 
 export class LeadController {
+  
+  // Create Lead
   async createLead(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
@@ -23,24 +25,20 @@ export class LeadController {
         });
 
         if (existing) {
-          return res.status(409).json({
-            error: 'Lead already exists',
-            lead: existing,
-          });
+          return res.status(409).json({ error: 'Lead already exists', lead: existing });
         }
       }
 
-      // Get default stage if not provided
+      // Default Stage Logic
       let finalStageId = stageId;
       if (!finalStageId) {
         const defaultStage = await prisma.stage.findFirst({
           where: { workspaceId: workspaceId! },
-          orderBy: { order: 'asc' },
+          orderBy: { order: 'asc' }, // Will pick "New Lead" (Order 0)
         });
         
-        // SAFETY CHECK: Agar stage nahi hai to error return karo
         if (!defaultStage) {
-            return res.status(400).json({ error: 'No pipeline stages found. Please create a stage first.' });
+            return res.status(400).json({ error: 'No pipeline stages found. Please ensure workspace is initialized correctly.' });
         }
         
         finalStageId = defaultStage?.id;
@@ -48,9 +46,13 @@ export class LeadController {
 
       const fullName = `${firstName || ''} ${lastName || ''}`.trim() || email || phone || 'Unknown';
 
-      // FIXED: Used 'connect' for relations
+      // FIX 1: Using Scalar IDs directly (Safer than 'connect')
       const lead = await prisma.lead.create({
         data: {
+          workspaceId: workspaceId!, // Direct ID Assignment
+          stageId: finalStageId,     // Direct ID Assignment
+          ownerId: req.user?.id || null, // Direct ID Assignment (Nullable)
+          
           email,
           phone,
           firstName,
@@ -58,37 +60,23 @@ export class LeadController {
           fullName,
           company,
           source,
-          customFields: customFields || {},
-          
-          // Relations
-          workspace: {
-            connect: { id: workspaceId! }
-          },
-          stage: {
-            connect: { id: finalStageId }
-          },
-          // Connect owner only if user is logged in
-          ...(req.user?.id ? {
-            owner: {
-                connect: { id: req.user.id }
-            }
-          } : {})
+          customFields: customFields || {}
         },
       });
 
-      // Create activity
+      // FIX 2: Activity Creation (The main error fix)
       await prisma.activity.create({
         data: {
           type: 'lead_created',
           title: 'Lead created',
           metadata: { source },
-          workspace: { connect: { id: workspaceId! } },
-          lead: { connect: { id: lead.id } },
-          ...(req.user?.id ? { user: { connect: { id: req.user.id } } } : {})
+          
+          // Relation Fields (Direct ID Assignment)
+          workspaceId: workspaceId!, 
+          leadId: lead.id,
+          userId: req.user?.id || null
         },
       });
-
-      // Trigger workflows logic would go here
 
       res.status(201).json(lead);
     } catch (error: any) {
@@ -97,18 +85,11 @@ export class LeadController {
     }
   }
 
+  // Get Leads
   async getLeads(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
-      const {
-        page = 1,
-        limit = 50,
-        search,
-        stageId,
-        source,
-        ownerId,
-        tags,
-      } = req.query;
+      const { page = 1, limit = 50, search, stageId, source, ownerId } = req.query;
 
       const where: any = { workspaceId };
 
@@ -123,7 +104,6 @@ export class LeadController {
       if (stageId) where.stageId = stageId;
       if (source) where.source = source;
       if (ownerId) where.ownerId = ownerId;
-      if (tags) where.tags = { hasSome: Array.isArray(tags) ? tags : [tags] };
 
       const [leads, total] = await Promise.all([
         prisma.lead.findMany({
@@ -153,6 +133,7 @@ export class LeadController {
     }
   }
 
+  // Get Single Lead
   async getLead(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
@@ -163,32 +144,13 @@ export class LeadController {
         include: {
           stage: true,
           owner: true,
-          activities: {
-            orderBy: { createdAt: 'desc' },
-            take: 50,
-          },
-          tasks: {
-            where: { status: { not: 'completed' } },
-            orderBy: { dueAt: 'asc' },
-          },
-          enrollments: {
-            where: { status: 'active' },
-            include: { sequence: true },
-          },
-          emails: {
-            orderBy: { createdAt: 'desc' },
-            take: 20,
-          },
-          meetings: {
-            orderBy: { startTime: 'desc' },
-            take: 10,
-          },
+          activities: { orderBy: { createdAt: 'desc' }, take: 50 },
+          tasks: { where: { status: { not: 'completed' } }, orderBy: { dueAt: 'asc' } },
+          emails: { orderBy: { createdAt: 'desc' }, take: 20 },
         },
       });
 
-      if (!lead) {
-        return res.status(404).json({ error: 'Lead not found' });
-      }
+      if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
       res.json(lead);
     } catch (error: any) {
@@ -196,6 +158,7 @@ export class LeadController {
     }
   }
 
+  // Update Lead
   async updateLead(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
@@ -206,9 +169,7 @@ export class LeadController {
         where: { id: leadId, workspaceId: workspaceId! },
       });
 
-      if (!lead) {
-        return res.status(404).json({ error: 'Lead not found' });
-      }
+      if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
       // Track stage change
       if (updates.stageId && updates.stageId !== lead.stageId) {
@@ -216,17 +177,13 @@ export class LeadController {
           data: {
             type: 'stage_changed',
             title: 'Stage changed',
-            metadata: {
-              oldStageId: lead.stageId,
-              newStageId: updates.stageId,
-            },
-            workspace: { connect: { id: workspaceId! } },
-            lead: { connect: { id: leadId } },
-            ...(req.user?.id ? { user: { connect: { id: req.user.id } } } : {})
+            metadata: { oldStageId: lead.stageId, newStageId: updates.stageId },
+            // Direct ID Assignment (Fixing here too)
+            workspaceId: workspaceId!,
+            leadId: leadId,
+            userId: req.user?.id || null
           },
         });
-
-        // Trigger stage_changed workflows
       }
 
       const updated = await prisma.lead.update({
@@ -240,56 +197,48 @@ export class LeadController {
     }
   }
 
+  // Import Leads
   async importLeads(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
       const { leads } = req.body;
 
-      if (!Array.isArray(leads)) {
-        return res.status(400).json({ error: 'Invalid leads data' });
-      }
+      if (!Array.isArray(leads)) return res.status(400).json({ error: 'Invalid leads data' });
 
-      const results = {
-        imported: 0,
-        skipped: 0,
-        errors: [] as any[],
-      };
+      const results = { imported: 0, skipped: 0, errors: [] as any[] };
 
+      // Default Bucket
       const defaultStage = await prisma.stage.findFirst({
         where: { workspaceId: workspaceId!, order: 0 },
       });
 
-      // Safety check for import as well
-      if (!defaultStage) {
-         return res.status(400).json({ error: 'No pipeline stages found. Please create a stage first.' });
-      }
+      if (!defaultStage) return res.status(400).json({ error: 'No pipeline stages found.' });
 
       for (const leadData of leads) {
         try {
           if (!leadData.email && !leadData.phone) {
-            results.errors.push({ data: leadData, error: 'Email or phone required' });
             results.skipped++;
             continue;
           }
 
-          // Check duplicate
-          if (leadData.email) {
-            const existing = await prisma.lead.findUnique({
-              where: { workspaceId_email: { workspaceId: workspaceId!, email: leadData.email } },
-            });
+          const existing = await prisma.lead.findUnique({
+             where: { workspaceId_email: { workspaceId: workspaceId!, email: leadData.email } },
+          });
 
-            if (existing) {
-              results.skipped++;
-              continue;
-            }
+          if (existing) {
+             results.skipped++;
+             continue;
           }
 
-          const fullName = `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() 
-            || leadData.email || leadData.phone || 'Unknown';
+          const fullName = `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() || leadData.email || 'Unknown';
 
-          // FIXED: Used 'connect' here as well
+          // FIX: Using Scalars here as well
           await prisma.lead.create({
             data: {
+              workspaceId: workspaceId!,
+              stageId: defaultStage.id,
+              ownerId: req.user?.id || null,
+              
               email: leadData.email,
               phone: leadData.phone,
               firstName: leadData.firstName,
@@ -297,28 +246,15 @@ export class LeadController {
               fullName,
               company: leadData.company,
               source: leadData.source || 'import',
-              customFields: leadData.customFields || {},
-              
-              // Relations
-              workspace: {
-                connect: { id: workspaceId! }
-              },
-              stage: {
-                connect: { id: defaultStage.id }
-              },
-              owner: {
-                connect: { id: req.user!.id }
-              }
+              customFields: leadData.customFields || {}
             },
           });
-
           results.imported++;
         } catch (error: any) {
           results.errors.push({ data: leadData, error: error.message });
           results.skipped++;
         }
       }
-
       res.json(results);
     } catch (error: any) {
       res.status(500).json({ error: error.message });

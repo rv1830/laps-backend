@@ -1,30 +1,25 @@
+// ============================================================================
+// src/controllers/workspace.controller.ts
+// ============================================================================
 import { Request, Response } from 'express';
 import { prisma } from '../app';
 
 export class WorkspaceController {
 
     /**
-     * Create a new CRM Workspace
-     * Inputs: name, industry, website, companySize, timezone
+     * Create Workspace + Auto-Create 9 Professional Stages
      */
     async createWorkspace(req: Request, res: Response) {
         try {
             const userId = (req as any).user.id;
             
-            // Destructure inputs
-            const { 
-                name, 
-                industry, 
-                website,      
-                companySize,  
-                timezone      
-            } = req.body;
+            const { name, industry, website, companySize, timezone } = req.body;
 
             if (!name) {
                 return res.status(400).json({ error: 'Workspace name is required' });
             }
 
-            // Transaction: Create Workspace + Assign Admin Role
+            // Transaction: Create Workspace -> Create Stages -> Assign Admin
             const result = await prisma.$transaction(async (tx) => {
                 
                 // 1. Ensure 'Admin' role exists
@@ -41,24 +36,18 @@ export class WorkspaceController {
                 }
 
                 // 2. Create Workspace
-                // Ab hum data ko direct columns mein daal rahe hain
                 const newWorkspace = await tx.workspace.create({
                     data: {
                         name,
                         industry,
-                        website,      // Saved to column
-                        companySize,  // Saved to column
-                        timezone: timezone || 'UTC', // Saved to column
-                        
+                        website,      
+                        companySize,  
+                        timezone: timezone || 'UTC', 
                         isActive: true,
-                        
-                        // Settings JSON ab clean rahega (future configs ke liye)
                         settings: {
                             dateFormat: 'DD/MM/YYYY',
                             workingDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
                         },
-                        
-                        // Default CRM settings
                         aiSettings: {
                             dataEnrichment: true,
                             emailDrafting: true
@@ -69,7 +58,21 @@ export class WorkspaceController {
                     }
                 });
 
-                // 3. Link User as Admin
+                // 3. MAGIC STEP: Automatically Create 8-9 Stages (Full Flow)
+                await tx.stage.createMany({
+                    data: [
+                        { workspaceId: newWorkspace.id, name: 'New Lead',      order: 0, color: '#3b82f6' }, // Blue
+                        { workspaceId: newWorkspace.id, name: 'Contacted',     order: 1, color: '#f59e0b' }, // Orange
+                        { workspaceId: newWorkspace.id, name: 'Replied',       order: 2, color: '#06b6d4' }, // Cyan (NEW)
+                        { workspaceId: newWorkspace.id, name: 'Call Booked',   order: 3, color: '#8b5cf6' }, // Purple (NEW)
+                        { workspaceId: newWorkspace.id, name: 'Presented',     order: 4, color: '#d946ef' }, // Fuchsia (NEW)
+                        { workspaceId: newWorkspace.id, name: 'Proposal Sent', order: 5, color: '#ec4899' }, // Pink
+                        { workspaceId: newWorkspace.id, name: 'Won',           order: 6, color: '#10b981', isWon: true },    // Green
+                        { workspaceId: newWorkspace.id, name: 'Lost',          order: 7, color: '#ef4444', isClosed: true }  // Red
+                    ]
+                });
+
+                // 4. Link User as Admin
                 await tx.workspaceUser.create({
                     data: {
                         userId: userId,
@@ -83,7 +86,7 @@ export class WorkspaceController {
             });
 
             return res.status(201).json({
-                message: 'Workspace created successfully',
+                message: 'Workspace and Pipeline created successfully',
                 workspace: result
             });
 
@@ -94,36 +97,25 @@ export class WorkspaceController {
     }
 
     /**
-     * Get All Workspaces for Current User
+     * Get All Workspaces
      */
     async getWorkspaces(req: Request, res: Response) {
         try {
             const userId = (req as any).user.id;
 
             const memberships = await prisma.workspaceUser.findMany({
-                where: {
-                    userId: userId,
-                    isActive: true
-                },
-                include: {
-                    workspace: true,
-                    role: true 
-                },
-                orderBy: {
-                    joinedAt: 'desc'
-                }
+                where: { userId: userId, isActive: true },
+                include: { workspace: true, role: true },
+                orderBy: { joinedAt: 'desc' }
             });
 
-            // Flatten structure
             const workspaces = memberships.map(m => ({
                 id: m.workspace.id,
                 name: m.workspace.name,
                 industry: m.workspace.industry,
-                // Direct columns se data aa raha hai ab
                 website: m.workspace.website,
                 companySize: m.workspace.companySize,
                 timezone: m.workspace.timezone,
-                
                 role: m.role.name,
                 isActive: m.workspace.isActive,
                 createdAt: m.workspace.createdAt
@@ -138,7 +130,7 @@ export class WorkspaceController {
     }
 
     /**
-     * Get Single Workspace Details
+     * Get Single Workspace
      */
     async getWorkspace(req: Request, res: Response) {
         try {
@@ -146,24 +138,19 @@ export class WorkspaceController {
             const { workspaceId } = req.params;
 
             const member = await prisma.workspaceUser.findUnique({
-                where: {
-                    workspaceId_userId: { workspaceId, userId }
-                },
+                where: { workspaceId_userId: { workspaceId, userId } },
                 include: { role: true }
             });
 
             if (!member || !member.isActive) {
-                return res.status(403).json({ error: 'Access denied or workspace not found' });
+                return res.status(403).json({ error: 'Access denied' });
             }
 
             const workspace = await prisma.workspace.findUnique({
                 where: { id: workspaceId }
             });
 
-            return res.json({ 
-                workspace,
-                userRole: member.role.name 
-            });
+            return res.json({ workspace, userRole: member.role.name });
 
         } catch (error) {
             console.error('Get Workspace Error:', error);
@@ -178,39 +165,32 @@ export class WorkspaceController {
         try {
             const userId = (req as any).user.id;
             const { workspaceId } = req.params;
-            // Update mein bhi fields destructure kar lo
             const { name, industry, website, companySize, timezone, settings } = req.body;
 
-            // 1. Check permission
             const member = await prisma.workspaceUser.findUnique({
                 where: { workspaceId_userId: { workspaceId, userId } },
                 include: { role: true }
             });
 
             if (!member || member.role.name !== 'Admin') {
-                return res.status(403).json({ error: 'Only workspace Admin can update settings' });
+                return res.status(403).json({ error: 'Only Admin can update settings' });
             }
 
-            // 2. Update
             const updatedWorkspace = await prisma.workspace.update({
                 where: { id: workspaceId },
                 data: {
                     name,
                     industry,
-                    website,      // Direct Column Update
-                    companySize,  // Direct Column Update
-                    timezone,     // Direct Column Update
+                    website,
+                    companySize,
+                    timezone,
                     settings: settings ? settings : undefined
                 }
             });
 
-            return res.json({
-                message: 'Workspace updated successfully',
-                workspace: updatedWorkspace
-            });
+            return res.json({ message: 'Updated', workspace: updatedWorkspace });
 
         } catch (error) {
-            console.error('Update Workspace Error:', error);
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -229,7 +209,7 @@ export class WorkspaceController {
             });
 
             if (!member || member.role.name !== 'Admin') {
-                return res.status(403).json({ error: 'Only workspace Admin can delete workspace' });
+                return res.status(403).json({ error: 'Only Admin can delete workspace' });
             }
 
             await prisma.workspace.update({
@@ -237,10 +217,9 @@ export class WorkspaceController {
                 data: { isActive: false }
             });
 
-            return res.json({ message: 'Workspace deleted successfully' });
+            return res.json({ message: 'Workspace deleted' });
 
         } catch (error) {
-            console.error('Delete Workspace Error:', error);
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
