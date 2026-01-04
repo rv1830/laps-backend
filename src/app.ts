@@ -1,18 +1,21 @@
 // ============================================================================
 // src/app.ts - Main Application Entry
 // ============================================================================
+import 'dotenv/config'; // Sabse upar zaroori hai
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import { PrismaClient } from '@prisma/client';
-import { createBullBoard } from '@bull-board/api';
-import { BullAdapter } from '@bull-board/api/bullAdapter';
-import { ExpressAdapter } from '@bull-board/express';
+
+// Redis/Bull Board imports commented out temporarily
+// import { createBullBoard } from '@bull-board/api';
+// import { BullAdapter } from '@bull-board/api/bullAdapter';
+// import { ExpressAdapter } from '@bull-board/express';
 
 // Middleware & Utilities
 import { errorHandler } from './middleware/error.middleware';
-import { setupJobs } from './jobs/index';
+// import { setupJobs } from './jobs/index'; // Commented out
 import { logger } from './utils/logger';
 
 // Routes Imports
@@ -22,6 +25,7 @@ import leadRoutes from './routes/lead.routes';
 import sequenceRoutes from './routes/sequence.routes';
 import analyticsRoutes from './routes/analytics.routes';
 import integrationRoutes from './routes/integration.routes';
+
 export const prisma = new PrismaClient();
 
 const app = express();
@@ -63,6 +67,7 @@ app.use('/api', sequenceRoutes);
 app.use('/api', analyticsRoutes);
 app.use('/api/integrations', integrationRoutes);
 
+/* // --- REDIS / BULL BOARD DISABLED TEMPORARILY ---
 // Bull Board for job monitoring
 const serverAdapter = new ExpressAdapter();
 serverAdapter.setBasePath('/admin/queues');
@@ -73,12 +78,13 @@ const { addQueue, removeQueue, setQueues, replaceQueues } = createBullBoard({
 });
 
 app.use('/admin/queues', serverAdapter.getRouter());
+*/
 
 // Error handling
 app.use(errorHandler);
 
 // Initialize jobs
-setupJobs();
+// setupJobs(); // Commented out to stop Redis connection attempts
 
 // Graceful shutdown
 process.on('SIGTERM', async () => {

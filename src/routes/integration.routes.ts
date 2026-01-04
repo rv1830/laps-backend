@@ -6,22 +6,31 @@ import { validateWorkspace } from '../middleware/workspace.middleware';
 const router = Router();
 const controller = new IntegrationController();
 
-// --- PUBLIC ROUTE (Callback from HubSpot) ---
-// Isme Auth middleware nahi lagega kyunki HubSpot call karega
+// ============================================================================
+// 1. PUBLIC ROUTES (Sabse Upar - Bina Login ke chalenge)
+// ============================================================================
+// Ye line 'authenticate' se pehle hona ZAROORI hai
 router.get('/hubspot/callback', controller.handleHubSpotCallback.bind(controller));
 
 
-// --- PROTECTED ROUTES (Requires Login + Workspace Access) ---
-router.use(authenticate); // User login check
+// ============================================================================
+// 2. SECURITY GATE (Yahan se niche sab Blocked hai bina Login ke)
+// ============================================================================
+router.use(authenticate); 
 
-// 1. Initiate Auth (Get URL)
+
+// ============================================================================
+// 3. PROTECTED ROUTES (Login + Workspace ID Required)
+// ============================================================================
+
+// Connect Button (URL Generate karna)
 router.get(
     '/workspaces/:workspaceId/hubspot/auth', 
     validateWorkspace, 
     controller.initiateHubSpotAuth.bind(controller)
 );
 
-// 2. Import Contacts
+// Import Button (Contacts fetch karna)
 router.post(
     '/workspaces/:workspaceId/hubspot/import', 
     validateWorkspace, 
