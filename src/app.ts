@@ -25,10 +25,23 @@ import analyticsRoutes from './routes/analytics.routes';
 export const prisma = new PrismaClient();
 
 const app = express();
+app.set('trust proxy', 1);
 
 // Middleware
 app.use(helmet());
-app.use(cors());
+
+// CORS Configuration
+app.use(cors({
+    origin: [
+        'http://localhost:3000',                // Local React
+        'http://localhost:4000',                // Local React (Alternate)
+        'https://laps-ui-demo.vercel.app'       // Production Frontend (Vercel)
+    ],
+    credentials: true, // IMPORTANT: Allows cookies to be sent/received
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg) } }));
@@ -42,12 +55,8 @@ app.get('/health', (req, res) => {
 // API Routes Mounting
 // =======================
 
-// 1. Auth Routes (Public)
-// URL: /api/auth/register, /api/auth/login
+// 1. Auth Routes
 app.use('/api', authRoutes); 
-
-// 2. Feature Routes (Protected internally via middleware in files)
-// Note: Humne /api prefix sabke liye common rakha hai
 app.use('/api', workspaceRoutes);
 app.use('/api', leadRoutes);
 app.use('/api', sequenceRoutes);

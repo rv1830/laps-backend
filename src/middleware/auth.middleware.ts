@@ -4,7 +4,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../app';
-import { authConfig } from '../config/auth'; // <-- IMPORT ZAROORI HAI
+import { authConfig } from '../config/auth'; 
 
 export interface AuthRequest extends Request {
   user?: {
@@ -20,22 +20,27 @@ export const authenticate = async (
   next: NextFunction
 ) => {
   try {
-    const authHeader = req.headers.authorization;
-    
-    if (!authHeader) {
+    let token;
+
+    // 1. Check Authorization Header (For Postman/Mobile)
+    if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
+        token = req.headers.authorization.split(' ')[1];
+    }
+    // 2. Check Cookies (For Web/Vercel)
+    else if (req.headers.cookie) {
+        const cookies = req.headers.cookie.split(';').reduce((acc: any, cookie) => {
+            const [key, value] = cookie.trim().split('=');
+            acc[key] = value;
+            return acc;
+        }, {});
+        token = cookies.token;
+    }
+
+    if (!token) {
       return res.status(401).json({ error: 'No token provided' });
     }
 
-    // "Bearer " handle karne ke liye safe logic
-    const token = authHeader.startsWith('Bearer ') 
-        ? authHeader.split(' ')[1] 
-        : authHeader;
-
-    if (!token) {
-      return res.status(401).json({ error: 'Invalid token format' });
-    }
-
-    // MAIN FIX: process.env ki jagah authConfig use kiya
+    // Verify
     const decoded = jwt.verify(token, authConfig.jwtSecret) as any;
     
     const user = await prisma.user.findUnique({
@@ -50,7 +55,7 @@ export const authenticate = async (
     req.user = { id: user.id, email: user.email };
     next();
   } catch (error) {
-    console.error('Middleware Auth Error:', error); // Debugging ke liye log
+    // console.error('Middleware Auth Error:', error); 
     return res.status(401).json({ error: 'Invalid token' });
   }
 };
