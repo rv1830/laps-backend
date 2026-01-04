@@ -63,9 +63,9 @@ app.get('/health', (req, res) => {
 // 1. Auth Routes
 app.use('/api', authRoutes); 
 app.use('/api', workspaceRoutes);
-app.use('/api', leadRoutes);
-app.use('/api', sequenceRoutes);
-app.use('/api', analyticsRoutes);
+app.use('/api/leads', leadRoutes);
+app.use('/api/sequence', sequenceRoutes);
+app.use('/api/analytics', analyticsRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/pipeline', pipelineRoutes);
 /* // --- REDIS / BULL BOARD DISABLED TEMPORARILY ---
