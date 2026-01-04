@@ -11,7 +11,8 @@ router.post('/login', authController.login.bind(authController));
 router.post('/forgot-password', authController.forgotPassword.bind(authController));
 router.post('/reset-password', authController.resetPassword.bind(authController));
 
-// Protected routes
+// Protected routes (Authenticated users only)
+router.post('/setup-profile', authenticate, authController.setupProfile.bind(authController)); // New Step 2
 router.get('/me', authenticate, authController.me.bind(authController));
 
 export default router;

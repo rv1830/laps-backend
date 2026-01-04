@@ -8,16 +8,15 @@ import { validateEmail } from '../utils/validators';
 export class AuthController {
 
     /**
-     * Register a new user (Step 1: Identity)
-     * Checks for pending invitations to auto-join workspaces.
+     * Step 1: Register (Identity Only)
+     * Inputs: email, password, confirmPassword
      */
     async register(req: Request, res: Response) {
         try {
-            // Simplified Input (No phone/timezone/workspace name here)
-            const { email, password, firstName, lastName } = req.body;
+            const { email, password, confirmPassword } = req.body;
 
             // 1. Validation
-            if (!email || !password || !firstName || !lastName) {
+            if (!email || !password || !confirmPassword) {
                 return res.status(400).json({ error: 'Missing required fields' });
             }
 
@@ -27,6 +26,10 @@ export class AuthController {
 
             if (password.length < 8) {
                 return res.status(400).json({ error: 'Password must be at least 8 characters' });
+            }
+
+            if (password !== confirmPassword) {
+                return res.status(400).json({ error: 'Passwords do not match' });
             }
 
             // 2. Check if user exists
@@ -41,25 +44,25 @@ export class AuthController {
             // 3. Hash password
             const passwordHash = await bcrypt.hash(password, authConfig.saltRounds);
 
-            // 4. TRANSACTION: Create User + Check Invites (The Fork Logic)
+            // 4. TRANSACTION: Create User + Check Invites
+            // Note: User is created without Name/DOB/Phone initially (Schema must allow nulls for these)
             const result = await prisma.$transaction(async (tx) => {
                 // A. Create User
                 const newUser = await tx.user.create({
                     data: {
                         email,
                         passwordHash,
-                        firstName,
-                        lastName,
                         isActive: true,
+                        // firstName, lastName, dob, phone abhi null rahenge
                     },
                 });
 
-                // B. Check Pending Invites
+                // B. Check Pending Invites (Auto-join logic)
                 const pendingInvites = await tx.invitation.findMany({
                     where: { 
                         email: email, 
                         status: 'PENDING',
-                        expiresAt: { gt: new Date() } // Must not be expired
+                        expiresAt: { gt: new Date() }
                     }
                 });
 
@@ -67,7 +70,6 @@ export class AuthController {
 
                 if (pendingInvites.length > 0) {
                     for (const invite of pendingInvites) {
-                        // Create Relation (WorkspaceUser)
                         await tx.workspaceUser.create({
                             data: {
                                 userId: newUser.id,
@@ -76,7 +78,6 @@ export class AuthController {
                             }
                         });
 
-                        // Mark invite accepted
                         await tx.invitation.update({
                             where: { id: invite.id },
                             data: { status: 'ACCEPTED' }
@@ -92,26 +93,76 @@ export class AuthController {
             // 5. Generate Token
             const token = this.generateToken(result.user);
 
-            // 6. Set Cookie (Recommended)
+            // 6. Set Cookie
             res.cookie('token', token, {
                 httpOnly: true,
                 secure: process.env.NODE_ENV === 'production',
-                maxAge: 24 * 60 * 60 * 1000 // 1 day
+                maxAge: 24 * 60 * 60 * 1000
             });
 
             // 7. Return response
             const { passwordHash: _, ...userWithoutPassword } = result.user;
 
             return res.status(201).json({
-                message: 'User registered successfully',
+                message: 'User registered successfully. Please complete your profile.',
                 token,
                 user: userWithoutPassword,
-                // IMPORTANT: Tells frontend where to go next
+                // Frontend Logic: If isProfileComplete is false, redirect to Setup Profile
+                nextStep: 'SETUP_PROFILE', 
                 hasWorkspaces: result.joinedAnyWorkspace
             });
 
         } catch (error) {
             console.error('Register Error:', error);
+            return res.status(500).json({ error: 'Internal server error' });
+        }
+    }
+
+    /**
+     * Step 2: Setup Profile
+     * Inputs: firstName, lastName, dob, phoneNumber
+     */
+    async setupProfile(req: Request, res: Response) {
+        try {
+            const userId = (req as any).user.userId; // Middleware se aayega
+            const { firstName, lastName, dob, phoneNumber } = req.body;
+
+            // Validation
+            if (!firstName || !lastName || !dob || !phoneNumber) {
+                return res.status(400).json({ error: 'All profile fields are required' });
+            }
+
+            // Update User
+            const updatedUser = await prisma.user.update({
+                where: { id: userId },
+                data: {
+                    firstName,
+                    lastName,
+                    dob: new Date(dob), // Ensure valid date format
+                    phoneNumber,
+                    // Optional: Flag to mark profile as done if you have one in DB
+                    // isProfileComplete: true 
+                }
+            });
+
+            // Check workspace status for next redirection
+            const workspaceCount = await prisma.workspaceUser.count({
+                where: { userId: userId, isActive: true }
+            });
+
+            const { passwordHash: _, ...userWithoutPassword } = updatedUser;
+
+            return res.json({
+                message: 'Profile setup complete',
+                user: userWithoutPassword,
+                // Frontend Logic: If hasWorkspaces is false -> Redirect to Create Workspace
+                // If true -> Redirect to Dashboard
+                nextStep: workspaceCount > 0 ? 'DASHBOARD' : 'CREATE_WORKSPACE',
+                hasWorkspaces: workspaceCount > 0
+            });
+
+        } catch (error) {
+            console.error('Setup Profile Error:', error);
             return res.status(500).json({ error: 'Internal server error' });
         }
     }
@@ -127,7 +178,6 @@ export class AuthController {
                 return res.status(400).json({ error: 'Email and password are required' });
             }
 
-            // 1. Find user
             const user = await prisma.user.findUnique({
                 where: { email },
             });
@@ -140,39 +190,43 @@ export class AuthController {
                 return res.status(403).json({ error: 'Account is disabled' });
             }
 
-            // 2. Compare password
             const isMatch = await bcrypt.compare(password, user.passwordHash);
             if (!isMatch) {
                 return res.status(401).json({ error: 'Invalid credentials' });
             }
 
-            // 3. Update last login
             await prisma.user.update({
                 where: { id: user.id },
                 data: { lastLoginAt: new Date() },
             });
 
-            // 4. Generate token
             const token = this.generateToken(user);
 
-            // 5. Check if user has workspaces
             const workspaceCount = await prisma.workspaceUser.count({
                 where: { userId: user.id, isActive: true }
             });
 
-            // 6. Set Cookie
             res.cookie('token', token, { 
                 httpOnly: true, 
                 secure: process.env.NODE_ENV === 'production' 
             });
 
-            // 7. Return response
             const { passwordHash: _, ...userWithoutPassword } = user;
+
+            // Logic to determine redirection on Login
+            let nextStep = 'DASHBOARD';
+            // Check if profile is incomplete (Agar firstName null hai toh setup pe bhejo)
+            if (!user.firstName || !user.lastName) {
+                nextStep = 'SETUP_PROFILE';
+            } else if (workspaceCount === 0) {
+                nextStep = 'CREATE_WORKSPACE'; // Or 'ONBOARDING'
+            }
 
             return res.json({
                 message: 'Login successful',
                 token,
                 user: userWithoutPassword,
+                nextStep,
                 hasWorkspaces: workspaceCount > 0
             });
 
@@ -183,7 +237,7 @@ export class AuthController {
     }
 
     /**
-     * Forgot Password - Request Reset Link
+     * Forgot Password
      */
     async forgotPassword(req: Request, res: Response) {
         try {
@@ -253,7 +307,16 @@ export class AuthController {
             if (!freshUser) return res.status(404).json({ error: 'User not found' });
 
             const { passwordHash: _, ...userWithoutPassword } = freshUser;
-            return res.json({ user: userWithoutPassword });
+            
+            // Re-calculate workspace count for accurate frontend state
+            const workspaceCount = await prisma.workspaceUser.count({
+                 where: { userId: user.userId, isActive: true }
+            });
+
+            return res.json({ 
+                user: userWithoutPassword,
+                hasWorkspaces: workspaceCount > 0
+            });
 
         } catch (error) {
             console.error('Me Error:', error);

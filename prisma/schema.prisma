@@ -1,77 +1,81 @@
-// prisma/schema.prisma
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["postgresqlExtensions"]
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = "postgresql://neondb_owner:npg_PuQs4DMqNct0@ep-jolly-cell-adx8uogd-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+  provider   = "postgresql"
+  url        = "postgresql://neondb_owner:npg_PuQs4DMqNct0@ep-jolly-cell-adx8uogd-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
   extensions = [vector]
 }
-
 
 // ============================================================================
 // WORKSPACE & AUTH
 // ============================================================================
 
 model Workspace {
-  id          String   @id @default(cuid())
-  name        String
-  industry    String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  isActive    Boolean  @default(true)
-  
+  id        String   @id @default(cuid())
+  name      String
+  industry  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  isActive  Boolean  @default(true)
+
   // Settings
-  settings    Json     @default("{}")
+  settings           Json @default("{}")
   complianceSettings Json @default("{}")
-  aiSettings  Json     @default("{}")
-  
+  aiSettings         Json @default("{}")
+
   // Relations
-  users       WorkspaceUser[]
-  invitations Invitation[]
-  leads       Lead[]
-  stages      Stage[]
-  sequences   Sequence[]
-  workflows   Workflow[]
-  offers      Offer[]
-  proposals   Proposal[]
-  invoices    Invoice[]
-  emailAccounts EmailAccount[]
-  bookingLinks BookingLink[]
-  integrations Integration[]
-  customFields CustomField[]
-  templates   Template[]
-  
+  users          WorkspaceUser[]
+  invitations    Invitation[]
+  leads          Lead[]
+  stages         Stage[]
+  sequences      Sequence[]
+  workflows      Workflow[]
+  offers         Offer[]
+  proposals      Proposal[]
+  invoices       Invoice[]
+  emailAccounts  EmailAccount[]
+  bookingLinks   BookingLink[]
+  integrations   Integration[]
+  customFields   CustomField[]
+  templates      Template[]
+  knowledgeBases KnowledgeBase[] // Added missing relation
+
   @@index([isActive])
 }
 
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  passwordHash  String?
-  firstName     String
-  lastName      String
-  avatar        String?
-  phone         String?
-  timezone      String   @default("UTC")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  lastLoginAt   DateTime?
-  isActive      Boolean  @default(true)
+  id           String    @id @default(cuid())
+  email        String    @unique
+  passwordHash String?
+  
+  // FIXED: Made optional for Step 1 Registration
+  firstName    String?   
+  lastName     String?
+  
+  avatar       String?
+  phone        String?
+  timezone     String    @default("UTC")
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  lastLoginAt  DateTime?
+  isActive     Boolean   @default(true)
   emailVerified Boolean  @default(false)
-  
+
   // OAuth
-  googleId      String?  @unique
-  microsoftId   String?  @unique
-  
+  googleId    String? @unique
+  microsoftId String? @unique
+
   // Relations
   workspaces    WorkspaceUser[]
   assignedLeads Lead[]
   activities    Activity[]
   tasks         Task[]
   
+  // NOTE: Schema mein DOB nahi tha, agar controller mein chahiye to yahan 'dob DateTime?' add karna padega manually later.
+
   @@index([email])
   @@index([googleId])
   @@index([microsoftId])
@@ -84,11 +88,11 @@ model WorkspaceUser {
   roleId      String
   joinedAt    DateTime @default(now())
   isActive    Boolean  @default(true)
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role        Role      @relation(fields: [roleId], references: [id])
-  
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id])
+
   @@unique([workspaceId, userId])
   @@index([workspaceId])
   @@index([userId])
@@ -101,7 +105,7 @@ model Role {
   isSystem    Boolean  @default(false)
   permissions Json     @default("[]")
   createdAt   DateTime @default(now())
-  
+
   workspaceUsers WorkspaceUser[]
   invitations    Invitation[]
 }
@@ -112,14 +116,14 @@ model Invitation {
   email       String
   roleId      String
   status      String   @default("PENDING") // PENDING, ACCEPTED, EXPIRED
-  
-  expiresAt   DateTime
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  role        Role      @relation(fields: [roleId], references: [id])
-  
+
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id])
+
   @@index([email])
   @@index([workspaceId])
   @@index([status])
@@ -130,66 +134,66 @@ model Invitation {
 // ============================================================================
 
 model Lead {
-  id            String   @id @default(cuid())
-  workspaceId   String
-  
+  id          String @id @default(cuid())
+  workspaceId String
+
   // Basic info
-  email         String?
-  phone         String?
-  firstName     String?
-  lastName      String?
-  fullName      String
-  company       String?
-  jobTitle      String?
-  website       String?
-  
+  email     String?
+  phone     String?
+  firstName String?
+  lastName  String?
+  fullName  String
+  company   String?
+  jobTitle  String?
+  website   String?
+
   // CRM fields
-  stageId       String
-  source        String?
-  campaign      String?
-  medium        String?
-  utmParams     Json?
-  
+  stageId   String
+  source    String?
+  campaign  String?
+  medium    String?
+  utmParams Json?
+
   // Scoring & qualification
-  moodScore     Float?   @default(50)
-  moodLabel     String?  @default("neutral")
-  intentScore   Float?
+  moodScore          Float?  @default(50)
+  moodLabel          String? @default("neutral")
+  intentScore        Float?
   qualificationLabel String? @default("unqualified")
-  
+
   // Assignment
-  ownerId       String?
-  
+  ownerId String?
+
   // Tracking
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
   lastContactedAt DateTime?
-  lastActivityAt DateTime?
-  firstContactAt DateTime?
-  
+  lastActivityAt  DateTime?
+  firstContactAt  DateTime?
+
   // Status
-  isActive      Boolean  @default(true)
+  isActive       Boolean @default(true)
   isUnsubscribed Boolean @default(false)
-  isBounced     Boolean  @default(false)
-  
+  isBounced      Boolean @default(false)
+
   // Custom fields (JSONB)
-  customFields  Json     @default("{}")
-  
+  customFields Json @default("{}")
+
   // Metadata
-  tags          String[]
-  notes         String?
-  
+  tags  String[]
+  notes String?
+
   // Relations
-  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  stage         Stage     @relation(fields: [stageId], references: [id])
-  owner         User?     @relation(fields: [ownerId], references: [id])
-  activities    Activity[]
-  tasks         Task[]
-  enrollments   SequenceEnrollment[]
-  meetings      Meeting[]
-  proposals     Proposal[]
-  invoices      Invoice[]
-  emails        EmailMessage[]
-  
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  stage       Stage                @relation(fields: [stageId], references: [id])
+  owner       User?                @relation(fields: [ownerId], references: [id])
+  activities  Activity[]
+  tasks       Task[]
+  enrollments SequenceEnrollment[]
+  meetings    Meeting[]
+  proposals   Proposal[]
+  invoices    Invoice[]
+  emails      EmailMessage[]
+
   @@unique([workspaceId, email])
   @@index([workspaceId, stageId])
   @@index([workspaceId, ownerId])
@@ -200,88 +204,88 @@ model Lead {
 }
 
 model Stage {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   workspaceId String
   name        String
   description String?
   color       String?
   order       Int
-  isActive    Boolean  @default(true)
-  isClosed    Boolean  @default(false)
-  isWon       Boolean  @default(false)
-  
+  isActive    Boolean @default(true)
+  isClosed    Boolean @default(false)
+  isWon       Boolean @default(false)
+
   // Stage rules
-  rules       Json     @default("{}")
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  leads       Lead[]
-  
+  rules Json @default("{}")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  leads     Lead[]
+
   @@unique([workspaceId, name])
   @@index([workspaceId, order])
 }
 
 model Activity {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   workspaceId String
   leadId      String
   userId      String?
-  
-  type        String   // email_sent, email_received, call_completed, stage_changed, task_created, etc.
+
+  type        String // email_sent, email_received, call_completed, stage_changed, task_created, etc.
   title       String
   description String?
-  metadata    Json     @default("{}")
-  
-  createdAt   DateTime @default(now())
-  
-  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  user        User?    @relation(fields: [userId], references: [id])
-  
+  metadata    Json   @default("{}")
+
+  createdAt DateTime @default(now())
+
+  lead Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id])
+
   @@index([workspaceId, leadId, createdAt])
   @@index([type])
 }
 
 model Task {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   workspaceId String
   leadId      String
   assignedTo  String?
-  
+
   title       String
   description String?
-  type        String   // follow_up, call, send_proposal, etc.
-  priority    String   @default("medium")
-  status      String   @default("pending")
-  
+  type        String // follow_up, call, send_proposal, etc.
+  priority    String @default("medium")
+  status      String @default("pending")
+
   dueAt       DateTime?
   completedAt DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  metadata    Json     @default("{}")
-  
-  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  assignee    User?    @relation(fields: [assignedTo], references: [id])
-  
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  metadata Json @default("{}")
+
+  lead     Lead  @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignee User? @relation(fields: [assignedTo], references: [id])
+
   @@index([workspaceId, assignedTo, status])
   @@index([dueAt])
   @@index([leadId])
 }
 
 model CustomField {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
-  name        String
-  label       String
-  fieldType   String   // text, number, date, select, multi_select, boolean, url
-  options     Json?    // for select types
-  isRequired  Boolean  @default(false)
-  validation  Json?
-  
-  createdAt   DateTime @default(now())
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  
+
+  name       String
+  label      String
+  fieldType  String // text, number, date, select, multi_select, boolean, url
+  options    Json? // for select types
+  isRequired Boolean @default(false)
+  validation Json?
+
+  createdAt DateTime @default(now())
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
   @@unique([workspaceId, name])
 }
 
@@ -290,76 +294,76 @@ model CustomField {
 // ============================================================================
 
 model EmailAccount {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
-  email       String
-  provider    String   // gmail, outlook
-  isActive    Boolean  @default(true)
-  
+
+  email    String
+  provider String // gmail, outlook
+  isActive Boolean @default(true)
+
   // OAuth tokens (encrypted)
-  accessToken String
+  accessToken  String
   refreshToken String?
-  expiresAt   DateTime?
-  
+  expiresAt    DateTime?
+
   // Sending limits
-  dailyLimit  Int      @default(50)
-  sentToday   Int      @default(0)
-  lastReset   DateTime @default(now())
-  
+  dailyLimit Int      @default(50)
+  sentToday  Int      @default(0)
+  lastReset  DateTime @default(now())
+
   // Health
-  lastSyncAt  DateTime?
-  syncError   String?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  sentEmails  EmailMessage[]
-  
+  lastSyncAt DateTime?
+  syncError  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace  Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  sentEmails EmailMessage[]
+
   @@unique([workspaceId, email])
   @@index([workspaceId, isActive])
 }
 
 model EmailMessage {
-  id              String   @id @default(cuid())
-  workspaceId     String
-  leadId          String
-  emailAccountId  String?
-  
-  direction       String   // inbound, outbound
-  subject         String?
-  body            String?
-  htmlBody        String?
-  
+  id             String  @id @default(cuid())
+  workspaceId    String
+  leadId         String
+  emailAccountId String?
+
+  direction String // inbound, outbound
+  subject   String?
+  body      String?
+  htmlBody  String?
+
   // Email metadata
-  messageId       String?  @unique
-  threadId        String?
-  inReplyTo       String?
-  
-  status          String   // draft, pending_approval, scheduled, sent, delivered, opened, clicked, replied, bounced, failed
-  
+  messageId String? @unique
+  threadId  String?
+  inReplyTo String?
+
+  status String // draft, pending_approval, scheduled, sent, delivered, opened, clicked, replied, bounced, failed
+
   // Tracking
-  sentAt          DateTime?
-  deliveredAt     DateTime?
-  openedAt        DateTime?
-  clickedAt       DateTime?
-  repliedAt       DateTime?
-  bouncedAt       DateTime?
-  
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  openedAt    DateTime?
+  clickedAt   DateTime?
+  repliedAt   DateTime?
+  bouncedAt   DateTime?
+
   // Sequence context
-  sequenceId      String?
-  enrollmentId    String?
-  stepNumber      Int?
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  lead            Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  emailAccount    EmailAccount? @relation(fields: [emailAccountId], references: [id])
-  sequence        Sequence? @relation(fields: [sequenceId], references: [id])
-  enrollment      SequenceEnrollment? @relation(fields: [enrollmentId], references: [id])
-  
+  sequenceId   String?
+  enrollmentId String?
+  stepNumber   Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead         Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  emailAccount EmailAccount?       @relation(fields: [emailAccountId], references: [id])
+  sequence     Sequence?           @relation(fields: [sequenceId], references: [id])
+  enrollment   SequenceEnrollment? @relation(fields: [enrollmentId], references: [id])
+
   @@index([workspaceId, leadId])
   @@index([threadId])
   @@index([status])
@@ -367,102 +371,102 @@ model EmailMessage {
 }
 
 model Sequence {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
+
   name        String
   description String?
-  isActive    Boolean  @default(false)
-  
+  isActive    Boolean @default(false)
+
   // Settings
-  automationMode String @default("assisted") // manual, assisted, autopilot
-  sendingSchedule Json  @default("{}")
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  automationMode  String @default("assisted") // manual, assisted, autopilot
+  sendingSchedule Json   @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   steps       SequenceStep[]
   enrollments SequenceEnrollment[]
   emails      EmailMessage[]
-  
+
   @@index([workspaceId, isActive])
 }
 
 model SequenceStep {
-  id          String   @id @default(cuid())
-  sequenceId  String
-  
-  stepNumber  Int
-  stepType    String   // email, delay, condition
-  
+  id         String @id @default(cuid())
+  sequenceId String
+
+  stepNumber Int
+  stepType   String // email, delay, condition
+
   // Email content
-  templateId  String?
-  subject     String?
-  body        String?
-  
+  templateId String?
+  subject    String?
+  body       String?
+
   // Delay settings
-  delayValue  Int?
-  delayUnit   String?  // hours, days
-  
+  delayValue Int?
+  delayUnit  String? // hours, days
+
   // Condition settings
-  conditions  Json?
-  
-  createdAt   DateTime @default(now())
-  
-  sequence    Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
-  template    Template? @relation(fields: [templateId], references: [id])
-  
+  conditions Json?
+
+  createdAt DateTime @default(now())
+
+  sequence Sequence  @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  template Template? @relation(fields: [templateId], references: [id])
+
   @@unique([sequenceId, stepNumber])
   @@index([sequenceId])
 }
 
 model SequenceEnrollment {
-  id          String   @id @default(cuid())
-  sequenceId  String
-  leadId      String
-  
-  status      String   @default("active") // active, paused, completed, stopped
-  currentStep Int      @default(0)
-  
-  enrolledAt  DateTime @default(now())
+  id         String @id @default(cuid())
+  sequenceId String
+  leadId     String
+
+  status      String @default("active") // active, paused, completed, stopped
+  currentStep Int    @default(0)
+
+  enrolledAt  DateTime  @default(now())
   completedAt DateTime?
   stoppedAt   DateTime?
-  
+
   // Tracking
-  emailsSent  Int      @default(0)
-  repliesReceived Int  @default(0)
-  
-  sequence    Sequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
-  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  emails      EmailMessage[]
-  
+  emailsSent      Int @default(0)
+  repliesReceived Int @default(0)
+
+  sequence Sequence       @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+  lead     Lead           @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  emails   EmailMessage[]
+
   @@unique([sequenceId, leadId])
   @@index([status])
   @@index([sequenceId])
 }
 
 model Template {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
-  name        String
-  type        String   // email, proposal, invoice
-  category    String?  // cold_outreach, follow_up, etc.
-  
-  subject     String?
-  body        String?
-  content     Json?    // For proposal/invoice templates
-  
-  variables   String[] @default([])
-  
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  name     String
+  type     String // email, proposal, invoice
+  category String? // cold_outreach, follow_up, etc.
+
+  subject String?
+  body    String?
+  content Json? // For proposal/invoice templates
+
+  variables String[] @default([])
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace     Workspace      @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   sequenceSteps SequenceStep[]
-  
+
   @@index([workspaceId, type])
 }
 
@@ -471,75 +475,75 @@ model Template {
 // ============================================================================
 
 model Workflow {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
+
   name        String
   description String?
-  isActive    Boolean  @default(false)
-  
+  isActive    Boolean @default(false)
+
   // Trigger
-  triggerType String   // lead_created, stage_changed, email_reply, time_based, etc.
+  triggerType   String // lead_created, stage_changed, email_reply, time_based, etc.
   triggerConfig Json   @default("{}")
-  
+
   // Automation mode
   automationMode String @default("assisted")
-  
+
   // Workflow definition
-  definition  Json     @default("{}")
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  lastRunAt   DateTime?
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  runs        WorkflowRun[]
-  
+  definition Json @default("{}")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  lastRunAt DateTime?
+
+  workspace Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  runs      WorkflowRun[]
+
   @@index([workspaceId, isActive])
   @@index([triggerType])
 }
 
 model WorkflowRun {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
   workflowId  String
-  
-  status      String   // running, completed, failed, waiting_approval
-  
+
+  status String // running, completed, failed, waiting_approval
+
   // Context
-  triggerData Json     @default("{}")
-  executionLog Json    @default("[]")
-  
-  startedAt   DateTime @default(now())
+  triggerData  Json @default("{}")
+  executionLog Json @default("[]")
+
+  startedAt   DateTime  @default(now())
   completedAt DateTime?
-  
-  error       String?
-  
-  workflow    Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
-  
+
+  error String?
+
+  workflow Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
   @@index([workflowId, status])
   @@index([startedAt])
 }
 
 model ApprovalRequest {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
-  type        String   // email_send, stage_change, deal_close, etc.
-  entityType  String   // lead, proposal, invoice
-  entityId    String
-  
+
+  type       String // email_send, stage_change, deal_close, etc.
+  entityType String // lead, proposal, invoice
+  entityId   String
+
   requestedBy String
   approvedBy  String?
-  
-  status      String   @default("pending") // pending, approved, rejected
-  
-  data        Json     @default("{}")
-  reason      String?
-  
-  createdAt   DateTime @default(now())
+
+  status String @default("pending") // pending, approved, rejected
+
+  data   Json    @default("{}")
+  reason String?
+
+  createdAt   DateTime  @default(now())
   respondedAt DateTime?
-  
+
   @@index([workspaceId, status])
   @@index([requestedBy])
 }
@@ -549,74 +553,74 @@ model ApprovalRequest {
 // ============================================================================
 
 model BookingLink {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
-  name        String
-  slug        String   @unique
-  
+
+  name String
+  slug String @unique
+
   meetingType String
-  duration    Int      // minutes
+  duration    Int // minutes
   description String?
-  
+
   // Availability
-  availability Json    @default("{}")
-  bufferTime  Int      @default(0)
-  
+  availability Json @default("{}")
+  bufferTime   Int  @default(0)
+
   // Meeting settings
-  location    String?  // google_meet, zoom, phone, custom
+  location        String? // google_meet, zoom, phone, custom
   locationDetails String?
-  
+
   // Pre-call questions
-  questions   Json     @default("[]")
-  
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  meetings    Meeting[]
-  
+  questions Json @default("[]")
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  meetings  Meeting[]
+
   @@index([workspaceId, isActive])
   @@index([slug])
 }
 
 model Meeting {
-  id              String   @id @default(cuid())
-  workspaceId     String
-  leadId          String
-  bookingLinkId   String?
-  
-  title           String
-  description     String?
-  
-  startTime       DateTime
-  endTime         DateTime
-  timezone        String
-  
-  location        String?
-  meetingUrl      String?
-  
-  status          String   @default("scheduled") // scheduled, completed, cancelled, no_show
-  
+  id            String  @id @default(cuid())
+  workspaceId   String
+  leadId        String
+  bookingLinkId String?
+
+  title       String
+  description String?
+
+  startTime DateTime
+  endTime   DateTime
+  timezone  String
+
+  location   String?
+  meetingUrl String?
+
+  status String @default("scheduled") // scheduled, completed, cancelled, no_show
+
   // Sync with calendar
-  googleEventId   String?
-  outlookEventId  String?
-  
+  googleEventId  String?
+  outlookEventId String?
+
   // Pre-call data
-  answers         Json?
-  
+  answers Json?
+
   // Post-call
-  notes           String?
-  outcome         String?
-  completedAt     DateTime?
-  
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  lead            Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  bookingLink     BookingLink? @relation(fields: [bookingLinkId], references: [id])
-  
+  notes       String?
+  outcome     String?
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  lead        Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  bookingLink BookingLink? @relation(fields: [bookingLinkId], references: [id])
+
   @@index([workspaceId, leadId])
   @@index([startTime])
   @@index([status])
@@ -627,109 +631,109 @@ model Meeting {
 // ============================================================================
 
 model Offer {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
+
   name        String
   description String?
-  offerType   String   // product, package, custom
-  
+  offerType   String // product, package, custom
+
   // Pricing
-  basePrice   Decimal?
-  currency    String   @default("USD")
-  
+  basePrice Decimal?
+  currency  String   @default("USD")
+
   // Details
   deliverables Json    @default("[]")
-  timeline    String?
-  
+  timeline     String?
+
   // Knowledge base
-  faqs        Json     @default("[]")
-  
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  
+  faqs Json @default("[]")
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
   @@index([workspaceId, isActive])
 }
 
 model Proposal {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
   leadId      String
-  
-  title       String
-  content     Json     // Structured proposal content
-  
+
+  title   String
+  content Json // Structured proposal content
+
   // Line items
-  lineItems   Json     @default("[]")
-  subtotal    Decimal
-  tax         Decimal  @default(0)
-  total       Decimal
-  currency    String   @default("USD")
-  
-  status      String   @default("draft") // draft, sent, viewed, accepted, rejected
-  
+  lineItems Json    @default("[]")
+  subtotal  Decimal
+  tax       Decimal @default(0)
+  total     Decimal
+  currency  String  @default("USD")
+
+  status String @default("draft") // draft, sent, viewed, accepted, rejected
+
   // Tracking
-  sentAt      DateTime?
-  viewedAt    DateTime?
-  acceptedAt  DateTime?
-  rejectedAt  DateTime?
-  
+  sentAt     DateTime?
+  viewedAt   DateTime?
+  acceptedAt DateTime?
+  rejectedAt DateTime?
+
   // PDF
-  pdfUrl      String?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  invoices    Invoice[]
-  
+  pdfUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  invoices  Invoice[]
+
   @@index([workspaceId, leadId])
   @@index([status])
 }
 
 model Invoice {
-  id          String   @id @default(cuid())
+  id          String  @id @default(cuid())
   workspaceId String
   leadId      String
   proposalId  String?
-  
-  invoiceNumber String  @unique
-  
+
+  invoiceNumber String @unique
+
   // Line items
-  lineItems   Json     @default("[]")
-  subtotal    Decimal
-  tax         Decimal  @default(0)
-  total       Decimal
-  currency    String   @default("USD")
-  
-  status      String   @default("draft") // draft, sent, viewed, paid, overdue, cancelled
-  
+  lineItems Json    @default("[]")
+  subtotal  Decimal
+  tax       Decimal @default(0)
+  total     Decimal
+  currency  String  @default("USD")
+
+  status String @default("draft") // draft, sent, viewed, paid, overdue, cancelled
+
   // Payment
-  paymentLink String?
+  paymentLink     String?
   paymentProvider String?
-  paymentId   String?
-  paidAmount  Decimal  @default(0)
-  
+  paymentId       String?
+  paidAmount      Decimal @default(0)
+
   // Dates
-  issueDate   DateTime @default(now())
-  dueDate     DateTime?
-  sentAt      DateTime?
-  paidAt      DateTime?
-  
+  issueDate DateTime  @default(now())
+  dueDate   DateTime?
+  sentAt    DateTime?
+  paidAt    DateTime?
+
   // PDF
-  pdfUrl      String?
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  lead        Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
-  proposal    Proposal? @relation(fields: [proposalId], references: [id])
-  
+  pdfUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lead      Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  proposal  Proposal? @relation(fields: [proposalId], references: [id])
+
   @@index([workspaceId, leadId])
   @@index([status])
   @@index([dueDate])
@@ -740,60 +744,60 @@ model Invoice {
 // ============================================================================
 
 model Integration {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
-  provider    String   // google, microsoft, razorpay, stripe, zoom, etc.
-  type        String   // calendar, email, payment, meeting, form
-  
-  isActive    Boolean  @default(true)
-  
+
+  provider String // google, microsoft, razorpay, stripe, zoom, etc.
+  type     String // calendar, email, payment, meeting, form
+
+  isActive Boolean @default(true)
+
   // OAuth/API credentials (encrypted)
-  credentials Json     @default("{}")
-  
+  credentials Json @default("{}")
+
   // Health
-  lastSyncAt  DateTime?
-  syncError   String?
-  
-  settings    Json     @default("{}")
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  
+  lastSyncAt DateTime?
+  syncError  String?
+
+  settings Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
   @@unique([workspaceId, provider, type])
   @@index([workspaceId, isActive])
 }
 
 model SuppressionList {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
-  email       String
-  reason      String   // unsubscribed, bounced, complaint, manual
-  
-  addedAt     DateTime @default(now())
-  
+
+  email  String
+  reason String // unsubscribed, bounced, complaint, manual
+
+  addedAt DateTime @default(now())
+
   @@unique([workspaceId, email])
   @@index([workspaceId])
   @@index([email])
 }
 
 model ConsentRecord {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
   leadId      String
-  
-  consentType String   // email_marketing, data_processing, etc.
+
+  consentType String // email_marketing, data_processing, etc.
   consented   Boolean
-  
-  ipAddress   String?
-  userAgent   String?
-  source      String?
-  
-  createdAt   DateTime @default(now())
-  
+
+  ipAddress String?
+  userAgent String?
+  source    String?
+
+  createdAt DateTime @default(now())
+
   @@index([workspaceId, leadId])
 }
 
@@ -802,22 +806,24 @@ model ConsentRecord {
 // ============================================================================
 
 model KnowledgeBase {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
+
   name        String
   content     String
-  contentType String   // faq, product_doc, pricing, etc.
-  
+  contentType String // faq, product_doc, pricing, etc.
+
   // Vector embeddings (for RAG)
-  embedding   Unsupported("vector(1536)")?
-  
-  metadata    Json     @default("{}")
-  
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  
+  embedding Unsupported("vector(1536)")?
+
+  metadata Json @default("{}")
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
   @@index([workspaceId, isActive])
 }
 
@@ -826,17 +832,17 @@ model KnowledgeBase {
 // ============================================================================
 
 model AnalyticsEvent {
-  id          String   @id @default(cuid())
+  id          String @id @default(cuid())
   workspaceId String
-  
-  eventType   String   // lead_created, email_sent, meeting_booked, deal_won, etc.
-  entityType  String
-  entityId    String
-  
-  properties  Json     @default("{}")
-  
-  timestamp   DateTime @default(now())
-  
+
+  eventType  String // lead_created, email_sent, meeting_booked, deal_won, etc.
+  entityType String
+  entityId   String
+
+  properties Json @default("{}")
+
+  timestamp DateTime @default(now())
+
   @@index([workspaceId, eventType, timestamp])
   @@index([entityType, entityId])
 }
