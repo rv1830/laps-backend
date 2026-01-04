@@ -1,10 +1,10 @@
-
 // ============================================================================
 // src/middleware/auth.middleware.ts
 // ============================================================================
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../app';
+import { authConfig } from '../config/auth'; // <-- IMPORT ZAROORI HAI
 
 export interface AuthRequest extends Request {
   user?: {
@@ -20,13 +20,23 @@ export const authenticate = async (
   next: NextFunction
 ) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const authHeader = req.headers.authorization;
     
-    if (!token) {
+    if (!authHeader) {
       return res.status(401).json({ error: 'No token provided' });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET!) as any;
+    // "Bearer " handle karne ke liye safe logic
+    const token = authHeader.startsWith('Bearer ') 
+        ? authHeader.split(' ')[1] 
+        : authHeader;
+
+    if (!token) {
+      return res.status(401).json({ error: 'Invalid token format' });
+    }
+
+    // MAIN FIX: process.env ki jagah authConfig use kiya
+    const decoded = jwt.verify(token, authConfig.jwtSecret) as any;
     
     const user = await prisma.user.findUnique({
       where: { id: decoded.userId },
@@ -34,12 +44,13 @@ export const authenticate = async (
     });
 
     if (!user || !user.isActive) {
-      return res.status(401).json({ error: 'Invalid token' });
+      return res.status(401).json({ error: 'Invalid token or user inactive' });
     }
 
-    req.user = user;
+    req.user = { id: user.id, email: user.email };
     next();
   } catch (error) {
+    console.error('Middleware Auth Error:', error); // Debugging ke liye log
     return res.status(401).json({ error: 'Invalid token' });
   }
 };

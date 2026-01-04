@@ -101,13 +101,10 @@ export class AuthController {
             });
 
             // 7. Return response
-            const { passwordHash: _, ...userWithoutPassword } = result.user;
-
+            // CHANGE: User object removed from response
             return res.status(201).json({
                 message: 'User registered successfully. Please complete your profile.',
                 token,
-                user: userWithoutPassword,
-                // Frontend Logic: If isProfileComplete is false, redirect to Setup Profile
                 nextStep: 'SETUP_PROFILE', 
                 hasWorkspaces: result.joinedAnyWorkspace
             });
@@ -124,7 +121,12 @@ export class AuthController {
      */
     async setupProfile(req: Request, res: Response) {
         try {
-            const userId = (req as any).user.userId; // Middleware se aayega
+            // FIX: Middleware 'id' bhejta hai, 'userId' nahi.
+            const userId = (req as any).user.id; 
+            
+            // Debugging log (Optional: Check karne ke liye ki ID aa rahi hai)
+            console.log('Setup Profile for User ID:', userId);
+
             const { firstName, lastName, dob, phoneNumber } = req.body;
 
             // Validation
@@ -134,18 +136,16 @@ export class AuthController {
 
             // Update User
             const updatedUser = await prisma.user.update({
-                where: { id: userId },
+                where: { id: userId }, // Ab ye undefined nahi hoga
                 data: {
                     firstName,
                     lastName,
-                    dob: new Date(dob), // Ensure valid date format
+                    dob: new Date(dob),
                     phoneNumber,
-                    // Optional: Flag to mark profile as done if you have one in DB
-                    // isProfileComplete: true 
                 }
             });
 
-            // Check workspace status for next redirection
+            // Check workspace status
             const workspaceCount = await prisma.workspaceUser.count({
                 where: { userId: userId, isActive: true }
             });
@@ -155,8 +155,6 @@ export class AuthController {
             return res.json({
                 message: 'Profile setup complete',
                 user: userWithoutPassword,
-                // Frontend Logic: If hasWorkspaces is false -> Redirect to Create Workspace
-                // If true -> Redirect to Dashboard
                 nextStep: workspaceCount > 0 ? 'DASHBOARD' : 'CREATE_WORKSPACE',
                 hasWorkspaces: workspaceCount > 0
             });
@@ -211,8 +209,6 @@ export class AuthController {
                 secure: process.env.NODE_ENV === 'production' 
             });
 
-            const { passwordHash: _, ...userWithoutPassword } = user;
-
             // Logic to determine redirection on Login
             let nextStep = 'DASHBOARD';
             // Check if profile is incomplete (Agar firstName null hai toh setup pe bhejo)
@@ -222,10 +218,10 @@ export class AuthController {
                 nextStep = 'CREATE_WORKSPACE'; // Or 'ONBOARDING'
             }
 
+            // CHANGE: User object removed from response
             return res.json({
                 message: 'Login successful',
                 token,
-                user: userWithoutPassword,
                 nextStep,
                 hasWorkspaces: workspaceCount > 0
             });
@@ -303,14 +299,15 @@ export class AuthController {
             const user = (req as any).user;
             if (!user) return res.status(401).json({ error: 'Not authenticated' });
 
-            const freshUser = await prisma.user.findUnique({ where: { id: user.userId } });
+            // FIX: Using user.id consistent with middleware
+            const freshUser = await prisma.user.findUnique({ where: { id: user.id } });
             if (!freshUser) return res.status(404).json({ error: 'User not found' });
 
             const { passwordHash: _, ...userWithoutPassword } = freshUser;
             
             // Re-calculate workspace count for accurate frontend state
             const workspaceCount = await prisma.workspaceUser.count({
-                 where: { userId: user.userId, isActive: true }
+                 where: { userId: user.id, isActive: true }
             });
 
             return res.json({ 
