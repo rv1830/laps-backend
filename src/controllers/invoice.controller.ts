@@ -69,7 +69,7 @@ export class InvoiceController {
             if (provider === 'razorpay') {
                 const razorpay = new RazorpayService();
                 const result = await razorpay.createPaymentLink({
-                    amount: Math.round(invoice.total * 100), // Convert to paise
+                    amount: Math.round(invoice.total.toNumber() * 100), // Convert to paise
                     currency: invoice.currency,
                     description: `Invoice ${invoice.invoiceNumber}`,
                     customerEmail: invoice.lead.email!,
@@ -80,7 +80,7 @@ export class InvoiceController {
             } else if (provider === 'stripe') {
                 const stripe = new StripeService();
                 const result = await stripe.createPaymentLink({
-                    amount: Math.round(invoice.total * 100), // Convert to cents
+                    amount: Math.round(invoice.total.toNumber() * 100), // Convert to cents
                     currency: invoice.currency.toLowerCase(),
                     description: `Invoice ${invoice.invoiceNumber}`,
                     customerEmail: invoice.lead.email!,

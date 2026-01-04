@@ -5,7 +5,7 @@
 import { Request, Response } from 'express';
 import { prisma } from '../config/database';
 import { AuthRequest } from '../middleware/auth.middleware';
-
+import { Stage } from '@prisma/client';
 export class AnalyticsController {
     async getFunnelMetrics(req: AuthRequest, res: Response) {
         try {
