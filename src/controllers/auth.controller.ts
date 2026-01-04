@@ -200,9 +200,26 @@ export class AuthController {
 
             const token = this.generateToken(user);
 
-            const workspaceCount = await prisma.workspaceUser.count({
-                where: { userId: user.id, isActive: true }
+            // Fetch User's Workspaces
+            const userWorkspaces = await prisma.workspaceUser.findMany({
+                where: {
+                    userId: user.id,
+                    isActive: true,
+                },
+                include: {
+                    workspace: {
+                        select: {
+                            id: true,
+                            name: true,
+                        }
+                    }
+                }
             });
+
+            const workspaces = userWorkspaces.map(uw => ({
+                id: uw.workspace.id,
+                name: uw.workspace.name
+            }));
 
             res.cookie('token', token, { 
                 httpOnly: true, 
@@ -214,16 +231,17 @@ export class AuthController {
             // Check if profile is incomplete (Agar firstName null hai toh setup pe bhejo)
             if (!user.firstName || !user.lastName) {
                 nextStep = 'SETUP_PROFILE';
-            } else if (workspaceCount === 0) {
+            } else if (workspaces.length === 0) {
                 nextStep = 'CREATE_WORKSPACE'; // Or 'ONBOARDING'
             }
 
-            // CHANGE: User object removed from response
+            // CHANGE: User object removed from response, workspaces list added
             return res.json({
                 message: 'Login successful',
                 token,
                 nextStep,
-                hasWorkspaces: workspaceCount > 0
+                hasWorkspaces: workspaces.length > 0,
+                workspaces // Returns array of { id, name }
             });
 
         } catch (error) {
