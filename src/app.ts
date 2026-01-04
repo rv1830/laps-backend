@@ -1,7 +1,6 @@
 // ============================================================================
 // src/app.ts - Main Application Entry
 // ============================================================================
-import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
