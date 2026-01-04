@@ -17,12 +17,18 @@ model Workspace {
   id        String   @id @default(cuid())
   name      String
   industry  String?
+  
+  // NEW COLUMNS ADDED
+  website     String?
+  companySize String?  // e.g., "1-10", "11-50"
+  timezone    String   @default("UTC") // Default set kar diya
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   isActive  Boolean  @default(true)
 
-  // Settings
-  settings           Json @default("{}")
+  // Settings ab alag rahenge (Configuration ke liye)
+  settings           Json @default("{}") 
   complianceSettings Json @default("{}")
   aiSettings         Json @default("{}")
 
@@ -41,10 +47,11 @@ model Workspace {
   integrations   Integration[]
   customFields   CustomField[]
   templates      Template[]
-  knowledgeBases KnowledgeBase[] // Added missing relation
+  knowledgeBases KnowledgeBase[]
 
   @@index([isActive])
 }
+
 
 model User {
   id            String    @id @default(cuid())

@@ -1,16 +1,20 @@
-import { Router, Request, Response } from 'express';
+import { Router, RequestHandler } from 'express';
 import { authenticate } from '../middleware/auth.middleware';
+import { WorkspaceController } from '../controllers/workspace.controller';
 
 const router = Router();
+const workspaceController = new WorkspaceController();
 
-// Placeholder handlers (Apna WorkspaceController bana ke replace kar lena)
-const getWorkspaces = (req: Request, res: Response) => { res.json({ message: "Get workspaces" }) };
-const createWorkspace = (req: Request, res: Response) => { res.json({ message: "Create workspace" }) };
-
-// Apply Auth Middleware
+// All routes here require Authentication
 router.use(authenticate);
 
-router.get('/workspaces', getWorkspaces);
-router.post('/workspaces', createWorkspace);
+// Create & List
+router.post('/workspaces', workspaceController.createWorkspace.bind(workspaceController) as RequestHandler);
+router.get('/workspaces', workspaceController.getWorkspaces.bind(workspaceController) as RequestHandler);
+
+// Single Workspace Operations (ID based)
+router.get('/workspaces/:workspaceId', workspaceController.getWorkspace.bind(workspaceController) as RequestHandler);
+router.patch('/workspaces/:workspaceId', workspaceController.updateWorkspace.bind(workspaceController) as RequestHandler); // Update
+router.delete('/workspaces/:workspaceId', workspaceController.deleteWorkspace.bind(workspaceController) as RequestHandler); // Delete
 
 export default router;
