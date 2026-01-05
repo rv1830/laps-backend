@@ -38,7 +38,8 @@ app.use(helmet());
 // CORS Configuration
 app.use(cors({
     origin: [
-        'http://localhost:3000',                // Local React
+        'http://localhost:3000',
+        'http://localhost:8080',                // Local React
         'http://localhost:4000',                // Local React (Alternate)
         'https://laps-ui-demo.vercel.app'       // Production Frontend (Vercel)
     ],
@@ -47,7 +48,7 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg) } }));
 
