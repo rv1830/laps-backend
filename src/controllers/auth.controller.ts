@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../app';
-import { authConfig, cookieOptions } from '../config/auth'; // Import options
+import { authConfig, cookieOptions } from '../config/auth';
 import { validateEmail } from '../utils/validators';
 
 export class AuthController {
@@ -68,7 +68,6 @@ export class AuthController {
 
             return res.status(201).json({
                 message: 'User registered successfully. Please complete your profile.',
-                // Token removed
                 nextStep: 'SETUP_PROFILE', 
                 hasWorkspaces: result.joinedAnyWorkspace
             });
@@ -104,7 +103,6 @@ export class AuthController {
 
             return res.json({
                 message: 'Profile setup complete',
-                // User object removed
                 nextStep: workspaceCount > 0 ? 'DASHBOARD' : 'CREATE_WORKSPACE',
                 hasWorkspaces: workspaceCount > 0
             });
@@ -160,7 +158,6 @@ export class AuthController {
 
             return res.json({
                 message: 'Login successful',
-                // Token removed
                 nextStep,
                 hasWorkspaces: workspaces.length > 0,
                 workspaces
@@ -172,7 +169,6 @@ export class AuthController {
         }
     }
 
-    // ... ForgotPassword, ResetPassword, Me (Same as before, keep helper generateToken)
     async forgotPassword(req: Request, res: Response) {
         try {
             const { email } = req.body;
@@ -198,16 +194,46 @@ export class AuthController {
         } catch (error) { return res.status(500).json({ error: 'Internal server error' }); }
     }
 
+    // UPDATED ME FUNCTION
     async me(req: Request, res: Response) {
         try {
             const user = (req as any).user;
             if (!user) return res.status(401).json({ error: 'Not authenticated' });
+            
+            // 1. Fetch fresh user data
             const freshUser = await prisma.user.findUnique({ where: { id: user.id } });
             if (!freshUser) return res.status(404).json({ error: 'User not found' });
+            
+            // 2. Fetch Workspaces (Same logic as Login)
+            const userWorkspaces = await prisma.workspaceUser.findMany({
+                where: { userId: user.id, isActive: true },
+                include: { workspace: { select: { id: true, name: true } } }
+            });
+
+            const workspaces = userWorkspaces.map(uw => ({
+                id: uw.workspace.id,
+                name: uw.workspace.name
+            }));
+
+            // 3. Determine Next Step (Same logic as Login)
+            let nextStep = 'DASHBOARD';
+            if (!freshUser.firstName || !freshUser.lastName) {
+                nextStep = 'SETUP_PROFILE';
+            } else if (workspaces.length === 0) {
+                nextStep = 'CREATE_WORKSPACE';
+            }
+
             const { passwordHash: _, ...userWithoutPassword } = freshUser;
-            const workspaceCount = await prisma.workspaceUser.count({ where: { userId: user.id, isActive: true } });
-            return res.json({ user: userWithoutPassword, hasWorkspaces: workspaceCount > 0 });
-        } catch (error) { return res.status(500).json({ error: 'Internal server error' }); }
+            
+            return res.json({ 
+                user: userWithoutPassword, 
+                hasWorkspaces: workspaces.length > 0,
+                workspaces, // Added workspaces
+                nextStep    // Added nextStep logic
+            });
+        } catch (error) { 
+            return res.status(500).json({ error: 'Internal server error' }); 
+        }
     }
 
     private generateToken(user: any) {
