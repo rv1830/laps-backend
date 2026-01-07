@@ -12,7 +12,10 @@ router.post('/forgot-password', authController.forgotPassword.bind(authControlle
 router.post('/reset-password', authController.resetPassword.bind(authController));
 
 // Protected routes (Authenticated users only)
-router.post('/setup-profile', authenticate, authController.setupProfile.bind(authController)); // New Step 2
+router.post('/setup-profile', authenticate, authController.setupProfile.bind(authController)); 
 router.get('/check-status', authenticate, authController.me.bind(authController));
+
+// Logout route (Token cookie clear karne ke liye)
+router.post('/logout', authenticate, authController.logout.bind(authController));
 
 export default router;

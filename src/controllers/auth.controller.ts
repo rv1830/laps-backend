@@ -63,7 +63,7 @@ export class AuthController {
 
             const token = this.generateToken(result.user);
 
-            // SET COOKIE (No token in body)
+            // SET COOKIE
             res.cookie('token', token, cookieOptions);
 
             return res.status(201).json({
@@ -135,7 +135,6 @@ export class AuthController {
 
             const token = this.generateToken(user);
 
-            // Fetch User's Workspaces
             const userWorkspaces = await prisma.workspaceUser.findMany({
                 where: { userId: user.id, isActive: true },
                 include: { workspace: { select: { id: true, name: true } } }
@@ -146,7 +145,7 @@ export class AuthController {
                 name: uw.workspace.name
             }));
 
-            // SET COOKIE (No token in body)
+            // SET COOKIE
             res.cookie('token', token, cookieOptions);
 
             let nextStep = 'DASHBOARD';
@@ -194,17 +193,14 @@ export class AuthController {
         } catch (error) { return res.status(500).json({ error: 'Internal server error' }); }
     }
 
-    // UPDATED ME FUNCTION
     async me(req: Request, res: Response) {
         try {
             const user = (req as any).user;
             if (!user) return res.status(401).json({ error: 'Not authenticated' });
             
-            // 1. Fetch fresh user data
             const freshUser = await prisma.user.findUnique({ where: { id: user.id } });
             if (!freshUser) return res.status(404).json({ error: 'User not found' });
             
-            // 2. Fetch Workspaces (Same logic as Login)
             const userWorkspaces = await prisma.workspaceUser.findMany({
                 where: { userId: user.id, isActive: true },
                 include: { workspace: { select: { id: true, name: true } } }
@@ -215,7 +211,6 @@ export class AuthController {
                 name: uw.workspace.name
             }));
 
-            // 3. Determine Next Step (Same logic as Login)
             let nextStep = 'DASHBOARD';
             if (!freshUser.firstName || !freshUser.lastName) {
                 nextStep = 'SETUP_PROFILE';
@@ -228,11 +223,27 @@ export class AuthController {
             return res.json({ 
                 user: userWithoutPassword, 
                 hasWorkspaces: workspaces.length > 0,
-                workspaces, // Added workspaces
-                nextStep    // Added nextStep logic
+                workspaces,
+                nextStep
             });
         } catch (error) { 
             return res.status(500).json({ error: 'Internal server error' }); 
+        }
+    }
+
+    /**
+     * Logout User (Clears Cookie)
+     */
+    async logout(req: Request, res: Response) {
+        try {
+            // Cookie clear karne ke liye wahi options use karein jo config mein hain
+            res.clearCookie('token', {
+                ...cookieOptions,
+                maxAge: 0 // Turant expire karne ke liye
+            });
+            return res.json({ message: 'Logged out successfully' });
+        } catch (error) {
+            return res.status(500).json({ error: 'Internal server error' });
         }
     }
 
