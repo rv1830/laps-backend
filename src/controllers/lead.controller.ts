@@ -159,11 +159,12 @@ export class LeadController {
   }
 
   // Update Lead
+ // Update Lead
   async updateLead(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
       const { leadId } = req.params;
-      const updates = req.body;
+      const updates = { ...req.body }; // Body ko copy kiya taaki modify kar sakein
 
       const lead = await prisma.lead.findFirst({
         where: { id: leadId, workspaceId: workspaceId! },
@@ -171,14 +172,33 @@ export class LeadController {
 
       if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
-      // Track stage change
+      // FIX: Agar stageId string/label hai (jaise "Won"), toh Stage table se UUID find karo
+      if (updates.stageId) {
+        const targetStage = await prisma.stage.findFirst({
+          where: { 
+            workspaceId: workspaceId!,
+            name: { equals: updates.stageId, mode: 'insensitive' } 
+          }
+        });
+
+        if (targetStage) {
+          updates.stageId = targetStage.id; // Name ko asli UUID se replace kar diya
+        } else {
+          // Check karo agar stageId pehle se UUID hai ya nahi
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(updates.stageId);
+          if (!isUuid) {
+            return res.status(400).json({ error: `Invalid stage name: ${updates.stageId}` });
+          }
+        }
+      }
+
+      // Track stage change activity
       if (updates.stageId && updates.stageId !== lead.stageId) {
         await prisma.activity.create({
           data: {
             type: 'stage_changed',
             title: 'Stage changed',
             metadata: { oldStageId: lead.stageId, newStageId: updates.stageId },
-            // Direct ID Assignment (Fixing here too)
             workspaceId: workspaceId!,
             leadId: leadId,
             userId: req.user?.id || null
@@ -186,6 +206,7 @@ export class LeadController {
         });
       }
 
+      // Final update call
       const updated = await prisma.lead.update({
         where: { id: leadId },
         data: updates,
@@ -193,6 +214,7 @@ export class LeadController {
 
       res.json(updated);
     } catch (error: any) {
+      console.error("Update Error:", error);
       res.status(500).json({ error: error.message });
     }
   }
