@@ -198,29 +198,92 @@ export class WorkspaceController {
     /**
      * Delete Workspace
      */
-    async deleteWorkspace(req: Request, res: Response) {
+        async deleteWorkspace(req: Request, res: Response) {
+
         try {
-            const userId = (req as any).user.id;
+
+            const userId = (req as any).user.id; // From auth middleware
+
             const { workspaceId } = req.params;
 
+
+
+            // 1. Authorization Check: Ensure user is an ADMIN of this specific workspace
+
             const member = await prisma.workspaceUser.findUnique({
-                where: { workspaceId_userId: { workspaceId, userId } },
+
+                where: { 
+
+                    workspaceId_userId: { workspaceId, userId } 
+
+                },
+
                 include: { role: true }
+
             });
 
-            if (!member || member.role.name !== 'Admin') {
-                return res.status(403).json({ error: 'Only Admin can delete workspace' });
+
+
+            // Verification logic
+
+            if (!member || !member.isActive) {
+
+                return res.status(403).json({ error: 'Access denied. You are not a member of this workspace.' });
+
             }
 
-            await prisma.workspace.update({
-                where: { id: workspaceId },
-                data: { isActive: false }
+
+
+            if (member.role.name !== 'Admin') {
+
+                return res.status(403).json({ error: 'Permission denied. Only Admins can delete the workspace engine.' });
+
+            }
+
+
+
+            // 2. Perform Delete Operation
+
+            // Prisma will automatically delete linked Stages, Leads, Tasks, etc. due to Cascade
+
+            await prisma.workspace.delete({
+
+                where: { id: workspaceId }
+
             });
 
-            return res.json({ message: 'Workspace deleted' });
 
-        } catch (error) {
-            return res.status(500).json({ error: 'Internal server error' });
+
+            return res.json({ 
+
+                message: 'Workspace engine and all associated data permanently deleted.',
+
+                deletedId: workspaceId 
+
+            });
+
+
+
+        } catch (error: any) {
+
+            console.error('Delete Workspace Error:', error);
+
+            
+
+            // Handle cases where workspace might have been deleted already
+
+            if (error.code === 'P2025') {
+
+                return res.status(404).json({ error: 'Workspace instance not found' });
+
+            }
+
+
+
+            return res.status(500).json({ error: 'Internal server error during decommissioning' });
+
         }
+
     }
+
 }
