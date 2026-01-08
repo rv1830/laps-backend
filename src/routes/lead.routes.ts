@@ -18,5 +18,5 @@ router.get('/workspaces/:workspaceId', leadController.getLeads.bind(leadControll
 router.get('/workspaces/:workspaceId/:leadId', leadController.getLead.bind(leadController) as RequestHandler);
 router.patch('/workspaces/:workspaceId/:leadId', leadController.updateLead.bind(leadController) as RequestHandler);
 router.post('/workspaces/:workspaceId/import', leadController.importLeads.bind(leadController) as RequestHandler);
-
+router.delete('/workspaces/:workspaceId/:leadId', leadController.deleteLead.bind(leadController) as RequestHandler);
 export default router;

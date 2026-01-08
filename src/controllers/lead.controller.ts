@@ -260,4 +260,40 @@ export class LeadController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  // Delete Lead
+async deleteLead(req: AuthRequest, res: Response) {
+  try {
+    const { workspaceId } = req;
+    const { leadId } = req.params;
+
+    // 1. Check if lead exists in this workspace before deleting
+    const lead = await prisma.lead.findFirst({
+      where: { 
+        id: leadId, 
+        workspaceId: workspaceId! 
+      },
+    });
+
+    if (!lead) {
+      return res.status(404).json({ error: 'Lead not found or already deleted' });
+    }
+
+    // 2. Perform Delete
+    // Note: If you have foreign key constraints with 'onDelete: Cascade', 
+    // it will automatically delete associated activities/tasks.
+    await prisma.lead.delete({
+      where: { id: leadId },
+    });
+
+    // 3. (Optional) Log deletion in workspace activities if needed
+    // Since the lead is gone, we can't link it to the leadId anymore, 
+    // but we can log that a lead was removed from the workspace.
+
+    res.json({ message: 'Lead deleted successfully', id: leadId });
+  } catch (error: any) {
+    console.error("Delete Lead Error:", error);
+    res.status(500).json({ error: error.message });
+  }
+}
 }
