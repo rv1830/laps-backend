@@ -41,7 +41,7 @@ app.use(cors({
         'http://localhost:3000',
         'http://localhost:8080',                // Local React
         'http://localhost:4000',                // Local React (Alternate)
-        'https://laps-ui-demo.vercel.app'       // Production Frontend (Vercel)
+        'https://laps-one.vercel.app'       // Production Frontend (Vercel)
     ],
     credentials: true, // IMPORTANT: Allows cookies to be sent/received
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
