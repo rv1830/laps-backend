@@ -35,7 +35,7 @@ export class LeadController {
         });
         
         if (!defaultStage) {
-            return res.status(400).json({ error: 'No pipeline stages found.' });
+            return res.status(400).json({ error: 'No pipeline stages found. Please ensure workspace is initialized correctly.' });
         }
         
         finalStageId = defaultStage?.id;
@@ -45,9 +45,10 @@ export class LeadController {
 
       const lead = await prisma.lead.create({
         data: {
-          workspaceId: workspaceId!,
-          stageId: finalStageId,
-          ownerId: req.user?.id || null,
+          workspaceId: workspaceId!, 
+          stageId: finalStageId,     
+          ownerId: req.user?.id || null, 
+          
           email,
           phone,
           firstName,
@@ -77,7 +78,7 @@ export class LeadController {
     }
   }
 
-  // Get Leads (WITH FILTER FIX)
+  // Get Leads (Optimized for Mood, Source, and Stage)
   async getLeads(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
@@ -93,6 +94,7 @@ export class LeadController {
 
       const where: any = { workspaceId };
 
+      // 1. Search Logic
       if (search) {
         where.OR = [
           { fullName: { contains: search as string, mode: 'insensitive' } },
@@ -102,29 +104,36 @@ export class LeadController {
         ];
       }
 
-      // --- LOGIC FIX: Resolve Stage Name to UUID ---
+      // 2. Stage Resolution (Label to ID)
       if (stageId && stageId !== 'all') {
-        // Check if stageId is a UUID (length > 20) or a Name (like "Contacted")
         const isUuid = (stageId as string).length > 20;
-
         if (!isUuid) {
-          // If it's a name, find the actual ID in the database
           const resolvedStage = await prisma.stage.findFirst({
             where: {
               workspaceId: workspaceId!,
               name: { equals: stageId as string, mode: 'insensitive' }
             }
           });
-          // If found, use ID. If not found, set a dummy ID to return 0 results
           where.stageId = resolvedStage ? resolvedStage.id : 'none';
         } else {
           where.stageId = stageId;
         }
       }
 
-      if (source && source !== 'all') where.source = source as string;
-      if (ownerId && ownerId !== 'all') where.ownerId = ownerId;
-      if (moodLabel && moodLabel !== 'all') where.moodLabel = moodLabel as string;
+      // 3. Source Filter
+      if (source && source !== 'all') {
+        where.source = { equals: source as string, mode: 'insensitive' };
+      }
+
+      // 4. Mood Filter
+      if (moodLabel && moodLabel !== 'all') {
+        where.moodLabel = { equals: moodLabel as string, mode: 'insensitive' };
+      }
+
+      // 5. Owner Filter
+      if (ownerId && ownerId !== 'all') {
+        where.ownerId = ownerId;
+      }
 
       const [leads, total] = await Promise.all([
         prisma.lead.findMany({
