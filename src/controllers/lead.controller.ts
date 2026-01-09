@@ -239,7 +239,7 @@ export class LeadController {
     }
   }
 
-  // Import Leads (Optimized with Batching for High Volume)
+  // Import Leads (Optimized with Dual-Identifier Duplicate Checking)
   async importLeads(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
@@ -260,32 +260,43 @@ export class LeadController {
 
       // Pre-fetch existing leads to check for duplicates in one go
       const emailsToCheck = leads.map(l => l.email).filter(Boolean);
-      const existingLeads = await prisma.lead.findMany({
-        where: {
-          workspaceId: workspaceId!,
-          email: { in: emailsToCheck }
-        },
-        select: { email: true }
-      });
-      const existingEmailSet = new Set(existingLeads.map(l => l.email));
+      const phonesToCheck = leads.map(l => l.phone).filter(Boolean);
+
+      const [existingEmails, existingPhones] = await Promise.all([
+        prisma.lead.findMany({
+          where: { workspaceId: workspaceId!, email: { in: emailsToCheck } },
+          select: { email: true }
+        }),
+        prisma.lead.findMany({
+          where: { workspaceId: workspaceId!, phone: { in: phonesToCheck } },
+          select: { phone: true }
+        })
+      ]);
+
+      const existingEmailSet = new Set(existingEmails.map(l => l.email));
+      const existingPhoneSet = new Set(existingPhones.map(l => l.phone));
 
       const leadsToInsert = [];
       let skippedCount = 0;
 
       for (const leadData of leads) {
-        if (!leadData.email && !leadData.phone) {
-          skippedCount++;
-          continue;
-        }
+        // Validation line (if !email && !phone) removed.
+        // Even leads with no identifiers will now be imported.
 
-        if (leadData.email && existingEmailSet.has(leadData.email)) {
+        // Check for duplicate identifiers (Email OR Phone)
+        const isDuplicateEmail = leadData.email && existingEmailSet.has(leadData.email);
+        const isDuplicatePhone = leadData.phone && existingPhoneSet.has(leadData.phone);
+
+        if (isDuplicateEmail || isDuplicatePhone) {
           skippedCount++;
           continue;
         }
 
         const fullName = leadData.fullName || 
           `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() || 
-          leadData.email || 'Unknown';
+          leadData.email || 
+          leadData.phone || 
+          'Unknown Lead'; // Improved fallback name
 
         leadsToInsert.push({
           workspaceId: workspaceId!,
