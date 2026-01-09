@@ -244,65 +244,69 @@ export class LeadController {
   }
 
   // Import Leads
-  async importLeads(req: AuthRequest, res: Response) {
-    try {
-      const { workspaceId } = req;
-      const { leads } = req.body;
+ async importLeads(req: AuthRequest, res: Response) {
+  try {
+    const { workspaceId } = req;
+    const { leads } = req.body;
 
-      if (!Array.isArray(leads)) return res.status(400).json({ error: 'Invalid leads data' });
+    if (!Array.isArray(leads)) return res.status(400).json({ error: 'Invalid data' });
 
-      const results = { imported: 0, skipped: 0, errors: [] as any[] };
+    // Pehla pipeline stage dhoondo
+    const defaultStage = await prisma.stage.findFirst({
+      where: { workspaceId: workspaceId! },
+      orderBy: { order: 'asc' },
+    });
 
-      const defaultStage = await prisma.stage.findFirst({
-        where: { workspaceId: workspaceId!, order: 0 },
-      });
+    const results = { imported: 0, skipped: 0, errors: [] as any[] };
 
-      if (!defaultStage) return res.status(400).json({ error: 'No pipeline stages found.' });
+    for (const leadData of leads) {
+      try {
+        // Validation
+        if (!leadData.email && !leadData.phone) {
+          results.skipped++;
+          continue;
+        }
 
-      for (const leadData of leads) {
-        try {
-          if (!leadData.email && !leadData.phone) {
+        // Duplicate Email Check
+        if (leadData.email) {
+          const existing = await prisma.lead.findUnique({
+            where: { workspaceId_email: { workspaceId: workspaceId!, email: leadData.email } },
+          });
+          if (existing) {
             results.skipped++;
             continue;
           }
-
-          const existing = await prisma.lead.findUnique({
-             where: { workspaceId_email: { workspaceId: workspaceId!, email: leadData.email } },
-          });
-
-          if (existing) {
-             results.skipped++;
-             continue;
-          }
-
-          const fullName = `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() || leadData.email || 'Unknown';
-
-          await prisma.lead.create({
-            data: {
-              workspaceId: workspaceId!,
-              stageId: defaultStage.id,
-              ownerId: req.user?.id || null,
-              email: leadData.email,
-              phone: leadData.phone,
-              firstName: leadData.firstName,
-              lastName: leadData.lastName,
-              fullName,
-              company: leadData.company,
-              source: leadData.source || 'import',
-              customFields: leadData.customFields || {}
-            },
-          });
-          results.imported++;
-        } catch (error: any) {
-          results.errors.push({ data: leadData, error: error.message });
-          results.skipped++;
         }
+
+        const fullName = leadData.fullName || 
+          `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() || 
+          leadData.email || 'Unknown';
+
+        await prisma.lead.create({
+          data: {
+            workspaceId: workspaceId!,
+            stageId: leadData.stageId || defaultStage?.id || 'none',
+            ownerId: req.user?.id || null,
+            email: leadData.email || null,
+            phone: leadData.phone || null,
+            firstName: leadData.firstName,
+            lastName: leadData.lastName,
+            fullName,
+            company: leadData.company,
+            source: leadData.source || 'import',
+            customFields: leadData.customFields || {}
+          },
+        });
+        results.imported++;
+      } catch (err: any) {
+        results.errors.push(err.message);
       }
-      res.json(results);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
     }
+    res.json(results);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
   }
+}
 
   // Delete Lead
   async deleteLead(req: AuthRequest, res: Response) {
