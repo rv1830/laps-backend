@@ -13,12 +13,10 @@ export class LeadController {
       const { workspaceId } = req;
       const { email, phone, firstName, lastName, company, source, stageId, customFields } = req.body;
 
-      // Validation
       if (!email && !phone) {
         return res.status(400).json({ error: 'Email or phone required' });
       }
 
-      // Check for duplicate
       if (email) {
         const existing = await prisma.lead.findUnique({
           where: { workspaceId_email: { workspaceId: workspaceId!, email } },
@@ -29,16 +27,15 @@ export class LeadController {
         }
       }
 
-      // Default Stage Logic
       let finalStageId = stageId;
       if (!finalStageId) {
         const defaultStage = await prisma.stage.findFirst({
           where: { workspaceId: workspaceId! },
-          orderBy: { order: 'asc' }, // Will pick "New Lead" (Order 0)
+          orderBy: { order: 'asc' },
         });
         
         if (!defaultStage) {
-            return res.status(400).json({ error: 'No pipeline stages found. Please ensure workspace is initialized correctly.' });
+            return res.status(400).json({ error: 'No pipeline stages found.' });
         }
         
         finalStageId = defaultStage?.id;
@@ -46,13 +43,11 @@ export class LeadController {
 
       const fullName = `${firstName || ''} ${lastName || ''}`.trim() || email || phone || 'Unknown';
 
-      // FIX 1: Using Scalar IDs directly (Safer than 'connect')
       const lead = await prisma.lead.create({
         data: {
-          workspaceId: workspaceId!, // Direct ID Assignment
-          stageId: finalStageId,     // Direct ID Assignment
-          ownerId: req.user?.id || null, // Direct ID Assignment (Nullable)
-          
+          workspaceId: workspaceId!,
+          stageId: finalStageId,
+          ownerId: req.user?.id || null,
           email,
           phone,
           firstName,
@@ -64,14 +59,11 @@ export class LeadController {
         },
       });
 
-      // FIX 2: Activity Creation (The main error fix)
       await prisma.activity.create({
         data: {
           type: 'lead_created',
           title: 'Lead created',
           metadata: { source },
-          
-          // Relation Fields (Direct ID Assignment)
           workspaceId: workspaceId!, 
           leadId: lead.id,
           userId: req.user?.id || null
@@ -85,7 +77,7 @@ export class LeadController {
     }
   }
 
-  // Get Leads
+  // Get Leads (WITH FILTER FIX)
   async getLeads(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
@@ -110,8 +102,26 @@ export class LeadController {
         ];
       }
 
-      // Advanced Filters Logic
-      if (stageId && stageId !== 'all') where.stageId = stageId;
+      // --- LOGIC FIX: Resolve Stage Name to UUID ---
+      if (stageId && stageId !== 'all') {
+        // Check if stageId is a UUID (length > 20) or a Name (like "Contacted")
+        const isUuid = (stageId as string).length > 20;
+
+        if (!isUuid) {
+          // If it's a name, find the actual ID in the database
+          const resolvedStage = await prisma.stage.findFirst({
+            where: {
+              workspaceId: workspaceId!,
+              name: { equals: stageId as string, mode: 'insensitive' }
+            }
+          });
+          // If found, use ID. If not found, set a dummy ID to return 0 results
+          where.stageId = resolvedStage ? resolvedStage.id : 'none';
+        } else {
+          where.stageId = stageId;
+        }
+      }
+
       if (source && source !== 'all') where.source = source as string;
       if (ownerId && ownerId !== 'all') where.ownerId = ownerId;
       if (moodLabel && moodLabel !== 'all') where.moodLabel = moodLabel as string;
@@ -162,7 +172,6 @@ export class LeadController {
       });
 
       if (!lead) return res.status(404).json({ error: 'Lead not found' });
-
       res.json(lead);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -174,7 +183,7 @@ export class LeadController {
     try {
       const { workspaceId } = req;
       const { leadId } = req.params;
-      const updates = { ...req.body }; // Body ko copy kiya taaki modify kar sakein
+      const updates = { ...req.body };
 
       const lead = await prisma.lead.findFirst({
         where: { id: leadId, workspaceId: workspaceId! },
@@ -182,7 +191,6 @@ export class LeadController {
 
       if (!lead) return res.status(404).json({ error: 'Lead not found' });
 
-      // FIX: Agar stageId string/label hai (jaise "Won"), toh Stage table se UUID find karo
       if (updates.stageId) {
         const targetStage = await prisma.stage.findFirst({
           where: { 
@@ -192,17 +200,15 @@ export class LeadController {
         });
 
         if (targetStage) {
-          updates.stageId = targetStage.id; // Name ko asli UUID se replace kar diya
+          updates.stageId = targetStage.id;
         } else {
-          // Check karo agar stageId pehle se UUID hai ya nahi
-          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(updates.stageId);
+          const isUuid = (updates.stageId as string).length > 20;
           if (!isUuid) {
             return res.status(400).json({ error: `Invalid stage name: ${updates.stageId}` });
           }
         }
       }
 
-      // Track stage change activity
       if (updates.stageId && updates.stageId !== lead.stageId) {
         await prisma.activity.create({
           data: {
@@ -216,7 +222,6 @@ export class LeadController {
         });
       }
 
-      // Final update call
       const updated = await prisma.lead.update({
         where: { id: leadId },
         data: updates,
@@ -239,7 +244,6 @@ export class LeadController {
 
       const results = { imported: 0, skipped: 0, errors: [] as any[] };
 
-      // Default Bucket
       const defaultStage = await prisma.stage.findFirst({
         where: { workspaceId: workspaceId!, order: 0 },
       });
@@ -264,13 +268,11 @@ export class LeadController {
 
           const fullName = `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() || leadData.email || 'Unknown';
 
-          // FIX: Using Scalars here as well
           await prisma.lead.create({
             data: {
               workspaceId: workspaceId!,
               stageId: defaultStage.id,
               ownerId: req.user?.id || null,
-              
               email: leadData.email,
               phone: leadData.phone,
               firstName: leadData.firstName,
@@ -294,38 +296,27 @@ export class LeadController {
   }
 
   // Delete Lead
-async deleteLead(req: AuthRequest, res: Response) {
-  try {
-    const { workspaceId } = req;
-    const { leadId } = req.params;
+  async deleteLead(req: AuthRequest, res: Response) {
+    try {
+      const { workspaceId } = req;
+      const { leadId } = req.params;
 
-    // 1. Check if lead exists in this workspace before deleting
-    const lead = await prisma.lead.findFirst({
-      where: { 
-        id: leadId, 
-        workspaceId: workspaceId! 
-      },
-    });
+      const lead = await prisma.lead.findFirst({
+        where: { id: leadId, workspaceId: workspaceId! },
+      });
 
-    if (!lead) {
-      return res.status(404).json({ error: 'Lead not found or already deleted' });
+      if (!lead) {
+        return res.status(404).json({ error: 'Lead not found' });
+      }
+
+      await prisma.lead.delete({
+        where: { id: leadId },
+      });
+
+      res.json({ message: 'Lead deleted successfully', id: leadId });
+    } catch (error: any) {
+      console.error("Delete Lead Error:", error);
+      res.status(500).json({ error: error.message });
     }
-
-    // 2. Perform Delete
-    // Note: If you have foreign key constraints with 'onDelete: Cascade', 
-    // it will automatically delete associated activities/tasks.
-    await prisma.lead.delete({
-      where: { id: leadId },
-    });
-
-    // 3. (Optional) Log deletion in workspace activities if needed
-    // Since the lead is gone, we can't link it to the leadId anymore, 
-    // but we can log that a lead was removed from the workspace.
-
-    res.json({ message: 'Lead deleted successfully', id: leadId });
-  } catch (error: any) {
-    console.error("Delete Lead Error:", error);
-    res.status(500).json({ error: error.message });
   }
-}
 }
