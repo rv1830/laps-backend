@@ -89,7 +89,15 @@ export class LeadController {
   async getLeads(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
-      const { page = 1, limit = 50, search, stageId, source, ownerId } = req.query;
+      const { 
+        page = 1, 
+        limit = 50, 
+        search, 
+        stageId, 
+        source, 
+        ownerId,
+        moodLabel 
+      } = req.query;
 
       const where: any = { workspaceId };
 
@@ -98,12 +106,15 @@ export class LeadController {
           { fullName: { contains: search as string, mode: 'insensitive' } },
           { email: { contains: search as string, mode: 'insensitive' } },
           { company: { contains: search as string, mode: 'insensitive' } },
+          { phone: { contains: search as string, mode: 'insensitive' } },
         ];
       }
 
-      if (stageId) where.stageId = stageId;
-      if (source) where.source = source;
-      if (ownerId) where.ownerId = ownerId;
+      // Advanced Filters Logic
+      if (stageId && stageId !== 'all') where.stageId = stageId;
+      if (source && source !== 'all') where.source = source as string;
+      if (ownerId && ownerId !== 'all') where.ownerId = ownerId;
+      if (moodLabel && moodLabel !== 'all') where.moodLabel = moodLabel as string;
 
       const [leads, total] = await Promise.all([
         prisma.lead.findMany({
@@ -159,7 +170,6 @@ export class LeadController {
   }
 
   // Update Lead
- // Update Lead
   async updateLead(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
