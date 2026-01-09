@@ -48,8 +48,9 @@ app.use(cors({
     allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Replace existing express.json() and urlencoded with these:
+app.use(express.json({ limit: '100mb' })); 
+app.use(express.urlencoded({ limit: '100mb', extended: true }));
 app.use(morgan('combined', { stream: { write: (msg) => logger.info(msg) } }));
 
 // Health check

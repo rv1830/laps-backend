@@ -78,7 +78,7 @@ export class LeadController {
     }
   }
 
-  // Get Leads (Optimized for Mood, Source, and Stage)
+  // Get Leads (Optimized with Total Counts)
   async getLeads(req: AuthRequest, res: Response) {
     try {
       const { workspaceId } = req;
@@ -94,7 +94,6 @@ export class LeadController {
 
       const where: any = { workspaceId };
 
-      // 1. Search Logic
       if (search) {
         where.OR = [
           { fullName: { contains: search as string, mode: 'insensitive' } },
@@ -104,7 +103,6 @@ export class LeadController {
         ];
       }
 
-      // 2. Stage Resolution (Label to ID)
       if (stageId && stageId !== 'all') {
         const isUuid = (stageId as string).length > 20;
         if (!isUuid) {
@@ -120,22 +118,19 @@ export class LeadController {
         }
       }
 
-      // 3. Source Filter
       if (source && source !== 'all') {
         where.source = { equals: source as string, mode: 'insensitive' };
       }
 
-      // 4. Mood Filter
       if (moodLabel && moodLabel !== 'all') {
         where.moodLabel = { equals: moodLabel as string, mode: 'insensitive' };
       }
 
-      // 5. Owner Filter
       if (ownerId && ownerId !== 'all') {
         where.ownerId = ownerId;
       }
 
-      const [leads, total] = await Promise.all([
+      const [leads, totalCount] = await Promise.all([
         prisma.lead.findMany({
           where,
           include: {
@@ -151,15 +146,16 @@ export class LeadController {
 
       res.json({
         leads,
+        totalCount,
         pagination: {
           page: Number(page),
           limit: Number(limit),
-          total,
-          pages: Math.ceil(total / Number(limit)),
+          total: totalCount,
+          pages: Math.ceil(totalCount / Number(limit)),
         },
       });
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: "Failed to fetch leads. Please try again later." });
     }
   }
 
@@ -243,70 +239,94 @@ export class LeadController {
     }
   }
 
-  // Import Leads
- async importLeads(req: AuthRequest, res: Response) {
-  try {
-    const { workspaceId } = req;
-    const { leads } = req.body;
+  // Import Leads (Optimized with Batching for High Volume)
+  async importLeads(req: AuthRequest, res: Response) {
+    try {
+      const { workspaceId } = req;
+      const { leads } = req.body;
 
-    if (!Array.isArray(leads)) return res.status(400).json({ error: 'Invalid data' });
+      if (!Array.isArray(leads)) {
+        return res.status(400).json({ error: 'Invalid data format. Please provide an array of leads.' });
+      }
 
-    // Pehla pipeline stage dhoondo
-    const defaultStage = await prisma.stage.findFirst({
-      where: { workspaceId: workspaceId! },
-      orderBy: { order: 'asc' },
-    });
+      const defaultStage = await prisma.stage.findFirst({
+        where: { workspaceId: workspaceId! },
+        orderBy: { order: 'asc' },
+      });
 
-    const results = { imported: 0, skipped: 0, errors: [] as any[] };
+      if (!defaultStage) {
+        return res.status(400).json({ error: 'No pipeline stages found. Please initialize workspace stages first.' });
+      }
 
-    for (const leadData of leads) {
-      try {
-        // Validation
+      // Pre-fetch existing leads to check for duplicates in one go
+      const emailsToCheck = leads.map(l => l.email).filter(Boolean);
+      const existingLeads = await prisma.lead.findMany({
+        where: {
+          workspaceId: workspaceId!,
+          email: { in: emailsToCheck }
+        },
+        select: { email: true }
+      });
+      const existingEmailSet = new Set(existingLeads.map(l => l.email));
+
+      const leadsToInsert = [];
+      let skippedCount = 0;
+
+      for (const leadData of leads) {
         if (!leadData.email && !leadData.phone) {
-          results.skipped++;
+          skippedCount++;
           continue;
         }
 
-        // Duplicate Email Check
-        if (leadData.email) {
-          const existing = await prisma.lead.findUnique({
-            where: { workspaceId_email: { workspaceId: workspaceId!, email: leadData.email } },
-          });
-          if (existing) {
-            results.skipped++;
-            continue;
-          }
+        if (leadData.email && existingEmailSet.has(leadData.email)) {
+          skippedCount++;
+          continue;
         }
 
         const fullName = leadData.fullName || 
           `${leadData.firstName || ''} ${leadData.lastName || ''}`.trim() || 
           leadData.email || 'Unknown';
 
-        await prisma.lead.create({
-          data: {
-            workspaceId: workspaceId!,
-            stageId: leadData.stageId || defaultStage?.id || 'none',
-            ownerId: req.user?.id || null,
-            email: leadData.email || null,
-            phone: leadData.phone || null,
-            firstName: leadData.firstName,
-            lastName: leadData.lastName,
-            fullName,
-            company: leadData.company,
-            source: leadData.source || 'import',
-            customFields: leadData.customFields || {}
-          },
+        leadsToInsert.push({
+          workspaceId: workspaceId!,
+          stageId: leadData.stageId || defaultStage.id,
+          ownerId: req.user?.id || null,
+          email: leadData.email || null,
+          phone: leadData.phone || null,
+          firstName: leadData.firstName || null,
+          lastName: leadData.lastName || null,
+          fullName,
+          company: leadData.company || null,
+          source: leadData.source || 'import',
+          customFields: leadData.customFields || {}
         });
-        results.imported++;
-      } catch (err: any) {
-        results.errors.push(err.message);
       }
+
+      // Batch Insert (Optimization for 1 Lakh+ records)
+      const BATCH_SIZE = 5000;
+      let importedCount = 0;
+
+      for (let i = 0; i < leadsToInsert.length; i += BATCH_SIZE) {
+        const batch = leadsToInsert.slice(i, i + BATCH_SIZE);
+        const result = await prisma.lead.createMany({
+          data: batch,
+          skipDuplicates: true,
+        });
+        importedCount += result.count;
+      }
+
+      res.json({
+        success: true,
+        message: 'Import process completed successfully.',
+        imported: importedCount,
+        skipped: skippedCount + (leadsToInsert.length - importedCount),
+        total: leads.length
+      });
+    } catch (error: any) {
+      console.error("Import Error:", error);
+      res.status(500).json({ error: "An unexpected error occurred during lead import." });
     }
-    res.json(results);
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
   }
-}
 
   // Delete Lead
   async deleteLead(req: AuthRequest, res: Response) {
