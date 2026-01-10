@@ -90,18 +90,22 @@ export class PipelineController {
 
   /**
    * 4. Delete Stage
-   * Note: Leads in this stage might become orphans or need to be moved.
-   * Currently, we allow deletion, leads will have stageId pointing to nothing unless handled.
+   * Note: Leads in this stage will be automatically deleted because of 
+   * 'onDelete: Cascade' in the Prisma schema.
    */
   async deleteStage(req: AuthRequest, res: Response) {
       try {
           const { stageId } = req.params;
           
+          // Step 1: Delete the stage. 
+          // Because of onDelete: Cascade in schema, related leads are deleted by DB.
           await prisma.stage.delete({ 
               where: { id: stageId } 
           });
           
-          res.json({ message: 'Stage deleted successfully' });
+          res.json({ 
+              message: 'Stage and all its associated leads deleted successfully' 
+          });
       } catch (error: any) {
           res.status(500).json({ error: error.message });
       }

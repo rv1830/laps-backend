@@ -192,7 +192,7 @@ model Lead {
 
   // Relations
   workspace   Workspace            @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  stage       Stage                @relation(fields: [stageId], references: [id])
+  stage     Stage    @relation(fields: [stageId], references: [id], onDelete: Cascade)
   owner       User?                @relation(fields: [ownerId], references: [id])
   activities  Activity[]
   tasks       Task[]
