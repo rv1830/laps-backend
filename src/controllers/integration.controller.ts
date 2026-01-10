@@ -94,8 +94,8 @@ export class IntegrationController {
             });
 
             // 3. Redirect to Frontend Settings Page
-            // (Apne Frontend URL ke hisab se adjust kar lena)
-            return res.redirect(`https://laps-ui-demo.vercel.app/dashboard/settings?hubspot_connected=true`);
+           const frontendBaseUrl = process.env.FRONTEND_URL || "http://localhost:4000";
+           const redirectPath = `/dashboard/${workspaceId}/integration?hubspot_connected=true`;
 
         } catch (error: any) {
             console.error('HubSpot Callback Error:', error.response?.data || error.message);
