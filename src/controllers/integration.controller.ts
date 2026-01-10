@@ -95,7 +95,7 @@ export class IntegrationController {
 
             // 3. Redirect to Frontend Settings Page
            const frontendBaseUrl = process.env.FRONTEND_URL || "http://localhost:4000";
-           const redirectPath = `/dashboard/${workspaceId}/integration?hubspot_connected=true`;
+           const redirectPath = `http://localhost:4000/dashboard/${workspaceId}/integration?hubspot_connected=true`;
 
         } catch (error: any) {
             console.error('HubSpot Callback Error:', error.response?.data || error.message);
