@@ -94,8 +94,11 @@ export class IntegrationController {
             });
 
             // 3. Redirect to Frontend Settings Page
-           const frontendBaseUrl = process.env.FRONTEND_URL || "http://localhost:4000";
-           const redirectPath = `http://localhost:4000/dashboard/${workspaceId}/integration?hubspot_connected=true`;
+
+                        // (Apne Frontend URL ke hisab se adjust kar lena)
+            return res.redirect(`http://localhost:4000/dashboard/${workspaceId}/integration?hubspot_connected=true`);
+        //    const frontendBaseUrl = process.env.FRONTEND_URL || "http://localhost:4000";
+        //    const redirectPath = `http://localhost:4000/dashboard/${workspaceId}/integration?hubspot_connected=true`;
 
         } catch (error: any) {
             console.error('HubSpot Callback Error:', error.response?.data || error.message);
