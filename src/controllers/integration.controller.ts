@@ -61,7 +61,6 @@ export class IntegrationController {
             const expiresAt = new Date(Date.now() + expires_in * 1000);
 
             // 2. Save Tokens to Database (Integration Table)
-            // Hum 'type' = 'crm_import' use kar rahe hain unique constraint ke liye
             await prisma.integration.upsert({
                 where: {
                     workspaceId_provider_type: { 
@@ -93,12 +92,9 @@ export class IntegrationController {
                 }
             });
 
-            // 3. Redirect to Frontend Settings Page
-
-                        // (Apne Frontend URL ke hisab se adjust kar lena)
-            return res.redirect(`http://localhost:4000/dashboard/${workspaceId}/integration?hubspot_connected=true`);
-        //    const frontendBaseUrl = process.env.FRONTEND_URL || "http://localhost:4000";
-        //    const redirectPath = `http://localhost:4000/dashboard/${workspaceId}/integration?hubspot_connected=true`;
+            // 3. Redirect to Frontend Settings Page (Fixed ENV & Fallback)
+            const frontendBaseUrl = process.env.FRONTEND_URL || "https://laps-one.vercel.app";
+            return res.redirect(`${frontendBaseUrl}/dashboard/${workspaceId}/integration?hubspot_connected=true`);
 
         } catch (error: any) {
             console.error('HubSpot Callback Error:', error.response?.data || error.message);
@@ -187,7 +183,6 @@ export class IntegrationController {
             }
 
             // 4. Fetch Contacts from HubSpot API
-            // limit=100 for now. Production me pagination loop lagega.
             const hubRes = await axios.get('https://api.hubapi.com/crm/v3/objects/contacts', {
                 headers: { Authorization: `Bearer ${accessToken}` },
                 params: {
@@ -204,7 +199,6 @@ export class IntegrationController {
             for (const contact of contacts) {
                 const props = contact.properties;
                 
-                // Email mandatory hai unique check ke liye
                 if (!props.email) continue;
 
                 const fullName = `${props.firstname || ''} ${props.lastname || ''}`.trim() || props.email;
@@ -216,7 +210,6 @@ export class IntegrationController {
                             email: props.email
                         }
                     },
-                    // Agar lead exist karta hai, update karo
                     update: {
                         firstName: props.firstname,
                         lastName: props.lastname,
@@ -224,9 +217,8 @@ export class IntegrationController {
                         jobTitle: props.jobtitle,
                         company: props.company
                     },
-                    // Agar naya lead hai, create karo
                     create: {
-                        workspaceId: workspaceId!, // IMPORTANT: Workspace ID bind kar diya
+                        workspaceId: workspaceId!, 
                         stageId: defaultStage.id,
                         email: props.email,
                         firstName: props.firstname,
@@ -236,7 +228,7 @@ export class IntegrationController {
                         company: props.company,
                         fullName: fullName,
                         source: 'HubSpot Import',
-                        ownerId: req.user!.id // Jo import kar raha hai usko assign kar do
+                        ownerId: req.user!.id 
                     }
                 });
                 count++;
