@@ -27,6 +27,7 @@ import analyticsRoutes from './routes/analytics.routes';
 import integrationRoutes from './routes/integration.routes';
 import pipelineRoutes from './routes/pipeline.routes';
 import taskRoutes from './routes/task.routes';
+import acceleratorRoutes from './routes/accelerator.routes';
 export const prisma = new PrismaClient();
 
 const app = express();
@@ -71,6 +72,7 @@ app.use('/api/analytics', analyticsRoutes);
 app.use('/api/integrations', integrationRoutes);
 app.use('/api/pipeline', pipelineRoutes);
 app.use('/api/tasks', taskRoutes); 
+app.use('/api/accelerator', acceleratorRoutes);
 /* // --- REDIS / BULL BOARD DISABLED TEMPORARILY ---
 // Bull Board for job monitoring
 const serverAdapter = new ExpressAdapter();

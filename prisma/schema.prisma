@@ -48,6 +48,7 @@ model Workspace {
   customFields   CustomField[]
   templates      Template[]
   knowledgeBases KnowledgeBase[]
+  accelerators Accelerator[]
 
   @@index([isActive])
 }
@@ -161,7 +162,8 @@ model Lead {
   campaign  String?
   medium    String?
   utmParams Json?
-
+  acceleratorId String? 
+  accelerator Accelerator? @relation(fields: [acceleratorId], references: [id])
   // Scoring & qualification
   moodScore          Float?  @default(50)
   moodLabel          String? @default("neutral")
@@ -277,6 +279,48 @@ model Task {
   @@index([workspaceId, assignedTo, status])
   @@index([dueAt])
   @@index([leadId])
+}
+
+// ============================================================================
+// ACCELERATOR MODULES (SURVEYS, BIO-LINKS, TRACKING LINKS)
+// ============================================================================
+
+model Accelerator {
+  id          String   @id @default(cuid())
+  workspaceId String
+  type        String   // e.g., "SURVEY", "BIO_LINK", "TRACKING_LINK"
+  name        String
+  slug        String   @unique // Public link handle (e.g., laps.io/go/my-slug)
+  config      Json     @default("{}") // Stores Questions, Bio-links data, style configs
+  isActive    Boolean  @default(true)
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  analytics   AcceleratorAnalytics[]
+  leads       Lead[]    // Leads generated specifically from this accelerator
+
+  @@index([workspaceId, type])
+  @@index([slug])
+}
+
+model AcceleratorAnalytics {
+  id             String      @id @default(cuid())
+  acceleratorId  String
+  eventType      String      // "view", "click", "submission"
+  ipAddress      String?
+  userAgent      String?
+  referer        String?
+  metadata       Json        @default("{}") // Browser, Device, Location info
+  
+  timestamp      DateTime    @default(now())
+
+  accelerator    Accelerator @relation(fields: [acceleratorId], references: [id], onDelete: Cascade)
+
+  @@index([acceleratorId, eventType])
+  @@index([timestamp])
 }
 
 model CustomField {
